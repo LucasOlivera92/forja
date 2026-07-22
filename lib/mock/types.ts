@@ -15,6 +15,10 @@ export interface ExerciseCatalogItem {
   muscleGroup: string;
   /** Configurable por ejercicio — nunca hardcodeado en un componente. */
   videoUrl: string;
+  /** Metadata de catálogo (Sprint 3.4) — el ejercicio existe una sola vez acá; las rutinas solo lo referencian. */
+  description: string;
+  equipment: string;
+  exerciseType: string;
 }
 
 export interface ExercisePrescription {
@@ -44,6 +48,12 @@ export interface RoutineWeek {
 export interface Routine {
   id: string;
   name: string;
+  /** Metadata de catálogo (Sprint 3.4) — para la pantalla /rutinas. */
+  description: string;
+  sport: string;
+  goal: string;
+  weeksCount: number;
+  daysPerWeek: number;
   weeks: RoutineWeek[];
 }
 

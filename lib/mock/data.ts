@@ -12,44 +12,44 @@ import { ExerciseCatalogItem, ExercisePrescription, MealCatalogItem, Routine, Ro
 
 export const EXERCISE_CATALOG: ExerciseCatalogItem[] = [
   // Día 1: Empuje / Hombro
-  { id: "ex-press-plano-barra", name: "Press Plano con Barra", muscleGroup: "Pecho", videoUrl: "https://www.youtube.com/shorts/HzkHpIIo4IA" },
-  { id: "ex-dominadas-prona", name: "Dominadas Prona", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/ZDNmQXCfbmM" },
-  { id: "ex-hombro-z-press", name: "Hombros Z Press", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/FUJPvAD9jOo" },
-  { id: "ex-frances-polea-trasnuca", name: "Francés Polea Trasnuca", muscleGroup: "Tríceps", videoUrl: "https://www.youtube.com/shorts/5Okf9XhBhJk" },
-  { id: "ex-biceps-neutra-barra", name: "Bíceps Toma Neutra Barra", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/watch?v=kxWh3ZjROxE" },
-  { id: "ex-laterales-frontales-mancuerna", name: "Laterales + Frontales Mancuerna", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/tCihfHyR2Ts" },
+  { id: "ex-press-plano-barra", name: "Press Plano con Barra", muscleGroup: "Pecho", videoUrl: "https://www.youtube.com/shorts/HzkHpIIo4IA", description: "Press horizontal con barra en banco plano, movimiento base de empuje de pecho.", equipment: "Barra", exerciseType: "Compuesto" },
+  { id: "ex-dominadas-prona", name: "Dominadas Prona", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/ZDNmQXCfbmM", description: "Tracción vertical con toma prona en barra fija, trabaja dorsal ancho.", equipment: "Peso corporal", exerciseType: "Compuesto" },
+  { id: "ex-hombro-z-press", name: "Hombros Z Press", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/FUJPvAD9jOo", description: "Press de hombro sentado en el piso con piernas extendidas, exige estabilidad de core.", equipment: "Barra", exerciseType: "Compuesto" },
+  { id: "ex-frances-polea-trasnuca", name: "Francés Polea Trasnuca", muscleGroup: "Tríceps", videoUrl: "https://www.youtube.com/shorts/5Okf9XhBhJk", description: "Extensión de tríceps por detrás de la nuca con polea, foco en la cabeza larga.", equipment: "Polea", exerciseType: "Aislamiento" },
+  { id: "ex-biceps-neutra-barra", name: "Bíceps Toma Neutra Barra", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/watch?v=kxWh3ZjROxE", description: "Curl de bíceps con barra en agarre neutro, reduce estrés en muñeca.", equipment: "Barra", exerciseType: "Aislamiento" },
+  { id: "ex-laterales-frontales-mancuerna", name: "Laterales + Frontales Mancuerna", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/tCihfHyR2Ts", description: "Elevaciones laterales y frontales combinadas con mancuernas, aíslan deltoides.", equipment: "Mancuernas", exerciseType: "Aislamiento" },
 
   // Día 2: Pecho / Espalda + Core
-  { id: "ex-maquina-pecho-1-brazo", name: "Máquina de Pecho 1 Brazo", muscleGroup: "Pecho", videoUrl: "https://www.youtube.com/shorts/zmRlND0jdqk" },
-  { id: "ex-remo-menton-1-pie", name: "Remo al Mentón 1 Pie", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/uvzghA2eXcU" },
-  { id: "ex-remo-t-semi-prono", name: "Remo T Semi Prono", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/uLr8HcW_7ig" },
-  { id: "ex-biceps-media-esfera-barra", name: "Bíceps en Media Esfera con Barra", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/shorts/GGJe2TDQAbw" },
-  { id: "ex-t2b-plancha-antebrazo", name: "T2B Estricto + Plancha Antebrazo", muscleGroup: "Core", videoUrl: "https://www.youtube.com/shorts/B-B4I_LEQ58" },
-  { id: "ex-press-frances-w-acostado", name: "Press Francés Barra W Acostado (Rompecráneo)", muscleGroup: "Tríceps", videoUrl: "https://www.youtube.com/shorts/CAUWI4sNPKk" },
+  { id: "ex-maquina-pecho-1-brazo", name: "Máquina de Pecho 1 Brazo", muscleGroup: "Pecho", videoUrl: "https://www.youtube.com/shorts/zmRlND0jdqk", description: "Press de pecho unilateral en máquina, corrige desbalances entre lados.", equipment: "Máquina", exerciseType: "Compuesto" },
+  { id: "ex-remo-menton-1-pie", name: "Remo al Mentón 1 Pie", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/uvzghA2eXcU", description: "Remo vertical apoyado en un pie, suma exigencia de equilibrio al tirón.", equipment: "Mancuernas", exerciseType: "Compuesto" },
+  { id: "ex-remo-t-semi-prono", name: "Remo T Semi Prono", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/uLr8HcW_7ig", description: "Remo con barra T en agarre semi prono, foco en espalda media.", equipment: "Barra T", exerciseType: "Compuesto" },
+  { id: "ex-biceps-media-esfera-barra", name: "Bíceps en Media Esfera con Barra", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/shorts/GGJe2TDQAbw", description: "Curl de bíceps parado sobre media esfera, suma inestabilidad controlada.", equipment: "Barra", exerciseType: "Aislamiento" },
+  { id: "ex-t2b-plancha-antebrazo", name: "T2B Estricto + Plancha Antebrazo", muscleGroup: "Core", videoUrl: "https://www.youtube.com/shorts/B-B4I_LEQ58", description: "Toes-to-bar estricto combinado con plancha isométrica en antebrazos.", equipment: "Barra fija", exerciseType: "Isométrico" },
+  { id: "ex-press-frances-w-acostado", name: "Press Francés Barra W Acostado (Rompecráneo)", muscleGroup: "Tríceps", videoUrl: "https://www.youtube.com/shorts/CAUWI4sNPKk", description: "Extensión de tríceps acostado con barra W, movimiento clásico de aislamiento.", equipment: "Barra W", exerciseType: "Aislamiento" },
 
   // Día 3: Hombro / Pecho + Potencia
-  { id: "ex-press-hombro-parado-trasnuca", name: "Press de Hombro Parado Trasnuca", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/lgjsva8XsEw" },
-  { id: "ex-press-pecho-mancuerna-1-brazo-puente", name: "Press Pecho Mancuerna 1 Brazo (Puente Cadera)", muscleGroup: "Pecho", videoUrl: "https://www.youtube.com/shorts/O7PMT-nWNTY" },
-  { id: "ex-remo-1-brazo-ghd", name: "Remo 1 Brazo en GHD", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/4riS8gYu-3M" },
-  { id: "ex-hang-power-clean", name: "Hang Power Clean 🏀", muscleGroup: "Cuerpo completo / Potencia", videoUrl: "https://www.youtube.com/shorts/_q0dkHb89us" },
-  { id: "ex-biceps-pared-mancuernas-supino", name: "Bíceps Apoyando Espalda en Pared, Mancuernas Supino", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/shorts/5zB4KI7OaaY" },
-  { id: "ex-fondos-anillas", name: "Fondos en Anillas", muscleGroup: "Tríceps / Pecho", videoUrl: "https://www.youtube.com/shorts/5UUgrMWrEfI" },
+  { id: "ex-press-hombro-parado-trasnuca", name: "Press de Hombro Parado Trasnuca", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/lgjsva8XsEw", description: "Press de hombro parado bajando la barra por detrás de la nuca.", equipment: "Barra", exerciseType: "Compuesto" },
+  { id: "ex-press-pecho-mancuerna-1-brazo-puente", name: "Press Pecho Mancuerna 1 Brazo (Puente Cadera)", muscleGroup: "Pecho", videoUrl: "https://www.youtube.com/shorts/O7PMT-nWNTY", description: "Press de pecho unilateral sosteniendo puente de cadera, suma activación de core y glúteo.", equipment: "Mancuernas", exerciseType: "Compuesto" },
+  { id: "ex-remo-1-brazo-ghd", name: "Remo 1 Brazo en GHD", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/4riS8gYu-3M", description: "Remo unilateral apoyado en banco GHD, foco en espalda con rango controlado.", equipment: "GHD", exerciseType: "Compuesto" },
+  { id: "ex-hang-power-clean", name: "Hang Power Clean 🏀", muscleGroup: "Cuerpo completo / Potencia", videoUrl: "https://www.youtube.com/shorts/_q0dkHb89us", description: "Levantamiento olímpico desde la cadera, desarrolla potencia de cuerpo completo.", equipment: "Barra olímpica", exerciseType: "Potencia" },
+  { id: "ex-biceps-pared-mancuernas-supino", name: "Bíceps Apoyando Espalda en Pared, Mancuernas Supino", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/shorts/5zB4KI7OaaY", description: "Curl de bíceps con espalda apoyada en la pared para eliminar impulso.", equipment: "Mancuernas", exerciseType: "Aislamiento" },
+  { id: "ex-fondos-anillas", name: "Fondos en Anillas", muscleGroup: "Tríceps / Pecho", videoUrl: "https://www.youtube.com/shorts/5UUgrMWrEfI", description: "Fondos en anillas suspendidas, exige estabilidad extra de hombro y core.", equipment: "Anillas", exerciseType: "Compuesto" },
 
   // Día 4: Espalda / Core Rotacional
-  { id: "ex-press-landmine-estocada", name: "Press Landmine en Posición Estocada", muscleGroup: "Hombro / Core", videoUrl: "https://www.youtube.com/shorts/DHroGtml6MM" },
-  { id: "ex-remo-renegado-mancuernas", name: "Remo Renegado con Mancuernas", muscleGroup: "Espalda / Core", videoUrl: "https://www.youtube.com/shorts/DZ17Zeu274s" },
-  { id: "ex-australian-row-1-brazo", name: "Australian Row 1 Brazo", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/I4DR93poqt8" },
-  { id: "ex-remo-plancha-lateral-1-brazo", name: "Remo en Plancha Lateral 1 Brazo", muscleGroup: "Core", videoUrl: "https://www.youtube.com/watch?v=Xv9QBl5LB0A" },
-  { id: "ex-pull-over-media-esfera-mancuerna", name: "Pull Over en Media Esfera con Mancuerna", muscleGroup: "Espalda / Pecho", videoUrl: "https://www.youtube.com/shorts/k_cFbm-KXtI" },
-  { id: "ex-vuelos-posteriores-peck-deck", name: "Vuelos Posteriores en Peck Deck", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/bcWuQqr_0PU" },
+  { id: "ex-press-landmine-estocada", name: "Press Landmine en Posición Estocada", muscleGroup: "Hombro / Core", videoUrl: "https://www.youtube.com/shorts/DHroGtml6MM", description: "Press con barra landmine en estocada, combina empuje de hombro con estabilidad de tren inferior.", equipment: "Landmine", exerciseType: "Compuesto" },
+  { id: "ex-remo-renegado-mancuernas", name: "Remo Renegado con Mancuernas", muscleGroup: "Espalda / Core", videoUrl: "https://www.youtube.com/shorts/DZ17Zeu274s", description: "Remo alternado en posición de plancha con mancuernas, suma antirrotación de core.", equipment: "Mancuernas", exerciseType: "Compuesto" },
+  { id: "ex-australian-row-1-brazo", name: "Australian Row 1 Brazo", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/shorts/I4DR93poqt8", description: "Remo horizontal con cuerpo suspendido, unilateral, con peso corporal.", equipment: "Peso corporal", exerciseType: "Compuesto" },
+  { id: "ex-remo-plancha-lateral-1-brazo", name: "Remo en Plancha Lateral 1 Brazo", muscleGroup: "Core", videoUrl: "https://www.youtube.com/watch?v=Xv9QBl5LB0A", description: "Remo unilateral sostenido en plancha lateral, trabajo antirrotación de core.", equipment: "Mancuernas", exerciseType: "Isométrico" },
+  { id: "ex-pull-over-media-esfera-mancuerna", name: "Pull Over en Media Esfera con Mancuerna", muscleGroup: "Espalda / Pecho", videoUrl: "https://www.youtube.com/shorts/k_cFbm-KXtI", description: "Pull-over acostado sobre media esfera, involucra dorsal y pecho.", equipment: "Mancuerna", exerciseType: "Aislamiento" },
+  { id: "ex-vuelos-posteriores-peck-deck", name: "Vuelos Posteriores en Peck Deck", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/bcWuQqr_0PU", description: "Vuelos posteriores en máquina peck deck, foco en deltoides posterior.", equipment: "Máquina", exerciseType: "Aislamiento" },
 
   // Día 5: Espalda / Potencia + Hombro
-  { id: "ex-remo-barra-landmine", name: "Remo con Barra Landmine", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/watch?v=_bFf2_7iPNQ" },
-  { id: "ex-split-jerk", name: "Split Jerk 🏀", muscleGroup: "Cuerpo completo / Potencia", videoUrl: "https://www.youtube.com/shorts/kf-lQamAAxs" },
-  { id: "ex-rope-climb-manos", name: "Rope Climb con las Manos 🏀", muscleGroup: "Cuerpo completo / Potencia", videoUrl: "https://www.youtube.com/watch?v=iY0qSQxvDN4" },
-  { id: "ex-face-pull-soga", name: "Cable Face Pull Soga", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/lbt7obncwVs" },
-  { id: "ex-aperturas-peck-deck", name: "Aperturas Peck Deck", muscleGroup: "Pecho", videoUrl: "https://www.youtube.com/shorts/Y4jzm2c3szA" },
-  { id: "ex-biceps-barra-prona", name: "Bíceps con Barra Toma Prona", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/shorts/-lJFZ5cRaRM" },
+  { id: "ex-remo-barra-landmine", name: "Remo con Barra Landmine", muscleGroup: "Espalda", videoUrl: "https://www.youtube.com/watch?v=_bFf2_7iPNQ", description: "Remo con barra anclada en landmine, tirón horizontal con agarre neutro.", equipment: "Landmine", exerciseType: "Compuesto" },
+  { id: "ex-split-jerk", name: "Split Jerk 🏀", muscleGroup: "Cuerpo completo / Potencia", videoUrl: "https://www.youtube.com/shorts/kf-lQamAAxs", description: "Levantamiento olímpico de empuje con recepción en split, desarrolla potencia.", equipment: "Barra olímpica", exerciseType: "Potencia" },
+  { id: "ex-rope-climb-manos", name: "Rope Climb con las Manos 🏀", muscleGroup: "Cuerpo completo / Potencia", videoUrl: "https://www.youtube.com/watch?v=iY0qSQxvDN4", description: "Trepa de soga solo con brazos, fuerza y potencia de tren superior.", equipment: "Soga", exerciseType: "Potencia" },
+  { id: "ex-face-pull-soga", name: "Cable Face Pull Soga", muscleGroup: "Hombro", videoUrl: "https://www.youtube.com/shorts/lbt7obncwVs", description: "Tirón facial con soga en polea, trabaja deltoides posterior y rotadores.", equipment: "Polea", exerciseType: "Aislamiento" },
+  { id: "ex-aperturas-peck-deck", name: "Aperturas Peck Deck", muscleGroup: "Pecho", videoUrl: "https://www.youtube.com/shorts/Y4jzm2c3szA", description: "Aperturas de pecho en máquina peck deck, aislamiento del pectoral.", equipment: "Máquina", exerciseType: "Aislamiento" },
+  { id: "ex-biceps-barra-prona", name: "Bíceps con Barra Toma Prona", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/shorts/-lJFZ5cRaRM", description: "Curl de bíceps con barra en agarre prono (reverse curl), suma antebrazo.", equipment: "Barra", exerciseType: "Aislamiento" },
 ];
 
 /** Objetivo (series x reps) de un ejercicio para una semana puntual. */
@@ -181,12 +181,68 @@ function buildWeeks(routineId: string): RoutineWeek[] {
  * Rutina activa (mock). En un producto multi-rutina, esto sería una fila
  * más de una tabla `routines` filtrada por usuario — el repositorio ya
  * está escrito para recibir un `routineId` en vez de asumir esta constante.
+ *
+ * Es la rutina real de Luquita (Plan_El_Toro_1), primera rutina del
+ * catálogo de /rutinas (Sprint 3.4). Mismo `id` de siempre — no se toca
+ * para no romper sesiones ya guardadas — solo cambia el `name` visible.
  */
 export const ROUTINE: Routine = {
   id: ROUTINE_ID,
-  name: "FORJA — Básico",
+  name: "El Toro",
+  description: "Split de 5 días orientado a hipertrofia con bloques de potencia olímpica.",
+  sport: "Musculación",
+  goal: "Hipertrofia y potencia",
+  weeksCount: WEEK_COUNT,
+  daysPerWeek: DAY_TEMPLATES.length,
   weeks: buildWeeks(ROUTINE_ID),
 };
+
+/**
+ * Rutinas adicionales del catálogo (Sprint 3.4) — solo metadata, todavía
+ * sin semanas cargadas (`weeks: []`). Sirven para poblar la pantalla
+ * /rutinas con más de una tarjeta; no tienen navegación de detalle real
+ * hasta que se cargue su contenido en un sprint futuro.
+ */
+const RUNNING_BASE_ROUTINE: Routine = {
+  id: "routine-running-base",
+  name: "Running Base",
+  description: "Plan introductorio de acondicionamiento para correr distancias base.",
+  sport: "Running",
+  goal: "Resistencia aeróbica",
+  weeksCount: 0,
+  daysPerWeek: 0,
+  weeks: [],
+};
+
+const BASQUET_INICIAL_ROUTINE: Routine = {
+  id: "routine-basquet-inicial",
+  name: "Básquet Inicial",
+  description: "Trabajo físico general orientado a jugadores de básquet en etapa inicial.",
+  sport: "Básquet",
+  goal: "Rendimiento deportivo",
+  weeksCount: 0,
+  daysPerWeek: 0,
+  weeks: [],
+};
+
+const HIPERTROFIA_FULL_BODY_ROUTINE: Routine = {
+  id: "routine-hipertrofia-full-body",
+  name: "Hipertrofia Full Body",
+  description: "Rutina de cuerpo completo enfocada en ganancia de masa muscular.",
+  sport: "Musculación",
+  goal: "Hipertrofia",
+  weeksCount: 0,
+  daysPerWeek: 0,
+  weeks: [],
+};
+
+/** Catálogo completo de rutinas — fuente de datos de la pantalla /rutinas. */
+export const ROUTINES: Routine[] = [
+  ROUTINE,
+  RUNNING_BASE_ROUTINE,
+  BASQUET_INICIAL_ROUTINE,
+  HIPERTROFIA_FULL_BODY_ROUTINE,
+];
 
 export const MEAL_CATALOG: MealCatalogItem[] = [
   {

@@ -1,4 +1,4 @@
-import { EXERCISE_CATALOG, MEAL_CATALOG, ROUTINE } from "./data";
+import { EXERCISE_CATALOG, MEAL_CATALOG, ROUTINE, ROUTINES } from "./data";
 import {
   AceroState,
   DashboardSummary,
@@ -11,6 +11,7 @@ import {
   MealCatalogItem,
   MealLogEntry,
   NutritionProgress,
+  Routine,
   RoutineDayPlan,
   RoutineWeek,
   SetEntry,
@@ -60,10 +61,15 @@ function writeJSON<T>(key: string, value: T): void {
 /* Catálogo: rutina / semanas / días / ejercicios                      */
 /* ------------------------------------------------------------------ */
 
-export function getRoutine(routineId: string = ROUTINE.id) {
-  // Mock de una sola rutina activa. Con multi-rutina real, esto sería un
-  // SELECT por routineId — la firma ya está lista para eso.
-  return routineId === ROUTINE.id ? ROUTINE : ROUTINE;
+export function getRoutine(routineId: string = ROUTINE.id): Routine {
+  // Con multi-rutina real (Sprint 3.4) esto sería un SELECT por routineId
+  // contra la tabla `routines` — acá busca en el catálogo mock ROUTINES.
+  return ROUTINES.find((r) => r.id === routineId) ?? ROUTINE;
+}
+
+/** Catálogo completo de rutinas — usado por la pantalla /rutinas. */
+export function getRoutines(): Routine[] {
+  return ROUTINES;
 }
 
 export function getWeeks(routineId?: string): RoutineWeek[] {

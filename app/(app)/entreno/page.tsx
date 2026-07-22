@@ -1,65 +1,65 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { Card } from "@/shared/ui/Card";
-import { ProgressBar } from "@/shared/ui/ProgressBar";
-import { getRoutine, getWeekCompletion } from "@/lib/mock/repository";
+import { getRoutines } from "@/lib/mock/repository";
 
-const routine = getRoutine();
-
-interface WeekRow {
-  id: string;
-  label: string;
-  completedDays: number;
-  totalDays: number;
-  percent: number;
-}
-
+/**
+ * Sprint 3.5 — Entreno unificado: la raíz de /entreno ahora es el catálogo
+ * de rutinas (antes vivía por separado en /rutinas, que quedó eliminado
+ * para no duplicar pantallas). El flujo completo queda:
+ * Entreno (catálogo) → Rutina (semanas, /entreno/semanas) → Semana (días,
+ * /entreno/[weekId]) → Día (registro, /entreno/[weekId]/[dayId]) — estas
+ * últimas dos pantallas son exactamente las mismas que ya usaba Hoy para
+ * ir directo al registro, sin ningún cambio.
+ *
+ * Solo "El Toro" tiene semanas cargadas hoy; las otras 3 rutinas del
+ * catálogo son metadata sin contenido todavía y se muestran deshabilitadas.
+ */
 export default function EntrenoPage() {
-  const [weeks, setWeeks] = useState<WeekRow[] | null>(null);
-
-  useEffect(() => {
-    setWeeks(
-      routine.weeks.map((week) => {
-        const { completedDays, totalDays } = getWeekCompletion(week.id, routine.id);
-        return {
-          id: week.id,
-          label: week.label,
-          completedDays,
-          totalDays,
-          percent: totalDays === 0 ? 0 : Math.round((completedDays / totalDays) * 100),
-        };
-      })
-    );
-  }, []);
+  const routines = getRoutines();
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-display font-semibold">Entreno</h1>
-        <p className="text-text-secondary text-sm mt-1">{routine.name}</p>
+        <p className="text-text-secondary text-sm mt-1">Elegí tu rutina</p>
       </div>
 
       <div className="flex flex-col gap-3">
-        {(weeks ?? routine.weeks.map((w) => ({ id: w.id, label: w.label, completedDays: 0, totalDays: w.days.length, percent: 0 }))).map(
-          (week) => (
-            <Link key={week.id} href={`/entreno/${week.id}`}>
-              <Card raised className="active:scale-[0.98] transition-transform">
-                <div className="flex items-center justify-between">
-                  <p className="font-display text-lg uppercase tracking-wide">{week.label}</p>
-                  {week.percent === 100 && (
-                    <span className="text-success text-xs font-display uppercase tracking-wide">Completa</span>
-                  )}
-                </div>
-                <p className="text-text-secondary text-sm mt-1">
-                  {week.completedDays} / {week.totalDays} días
+        {routines.map((routine) => {
+          const hasContent = routine.weeks.length > 0;
+          const card = (
+            <Card
+              raised={hasContent}
+              className={hasContent ? "active:scale-[0.98] transition-transform" : "opacity-60"}
+            >
+              <div className="flex items-center justify-between">
+                <p className="font-display text-lg uppercase tracking-wide">{routine.name}</p>
+                {!hasContent && (
+                  <span className="text-text-muted text-xs font-display uppercase tracking-wide">Próximamente</span>
+                )}
+              </div>
+              <p className="text-text-secondary text-sm mt-1">{routine.description}</p>
+              <p className="text-text-muted text-xs mt-3">
+                {routine.sport} · {routine.goal}
+              </p>
+              {hasContent && (
+                <p className="text-text-muted text-xs mt-1">
+                  {routine.weeksCount} semanas · {routine.daysPerWeek} días por semana
                 </p>
-                <ProgressBar percent={week.percent} className="mt-3" />
-              </Card>
+              )}
+            </Card>
+          );
+
+          return hasContent ? (
+            <Link key={routine.id} href="/entreno/semanas">
+              {card}
             </Link>
-          )
-        )}
+          ) : (
+            <div key={routine.id}>{card}</div>
+          );
+        })}
       </div>
     </div>
   );
