@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card } from "@/shared/ui/Card";
 import { AceroElement } from "@/shared/ui/AceroElement";
-import { getDashboardSummary } from "@/lib/mock/repository";
+import { ProgressBar } from "@/shared/ui/ProgressBar";
+import { getCurrentDayPointer, getDashboardSummary } from "@/lib/mock/repository";
 import { DashboardSummary } from "@/lib/mock/types";
 
 function getGreeting(): string {
@@ -33,6 +34,8 @@ export default function HoyPage() {
   }
 
   const { workout, nutrition, aceroState, overallPercent, streak } = summary;
+  const pointer = getCurrentDayPointer();
+  const entrenoHref = pointer ? `/entreno/${pointer.weekId}/${pointer.dayId}` : "/entreno";
 
   return (
     <div className="flex flex-col gap-4">
@@ -55,7 +58,7 @@ export default function HoyPage() {
         <AceroElement state={aceroState} percent={overallPercent} />
       </Card>
 
-      <Link href="/entreno">
+      <Link href={entrenoHref}>
         <Card className="active:scale-[0.98] transition-transform">
           <div className="flex items-center justify-between">
             <p className="text-text-muted text-xs uppercase tracking-wide font-display">Entreno de hoy</p>
@@ -66,7 +69,7 @@ export default function HoyPage() {
           <p className="text-text-primary text-sm mt-2">
             {workout.completedSets} / {workout.totalSets} series registradas
           </p>
-          <ProgressBar percent={workout.percent} />
+          <ProgressBar percent={workout.percent} className="mt-3" />
         </Card>
       </Link>
 
@@ -82,20 +85,9 @@ export default function HoyPage() {
             {nutrition.completedMeals} / {nutrition.totalMeals} comidas · {nutrition.kcalConsumed} /{" "}
             {nutrition.kcalTarget} kcal
           </p>
-          <ProgressBar percent={nutrition.percent} />
+          <ProgressBar percent={nutrition.percent} className="mt-3" />
         </Card>
       </Link>
-    </div>
-  );
-}
-
-function ProgressBar({ percent }: { percent: number }) {
-  return (
-    <div className="h-1.5 rounded-full bg-bg-surface-raised mt-3 overflow-hidden">
-      <div
-        className="h-full rounded-full bg-accent-primary transition-[width] duration-500"
-        style={{ width: `${percent}%` }}
-      />
     </div>
   );
 }
