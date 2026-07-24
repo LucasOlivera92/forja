@@ -5,8 +5,18 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { Card } from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
-import { finishDay, getDayPlan, getDaySession, getExercise, getWeek, updateExerciseSet } from "@/lib/mock/repository";
-import { DaySession } from "@/lib/mock/types";
+import { clsx } from "@/shared/utils/clsx";
+import {
+  compareExerciseToHistory,
+  finishDay,
+  getDayPlan,
+  getDaySession,
+  getExercise,
+  getExerciseHistory,
+  getWeek,
+  updateExerciseSet,
+} from "@/lib/mock/repository";
+import { DaySession, ExerciseHistoryEntry } from "@/lib/mock/types";
 
 /**
  * Sprint 3.2 — motor de prescripción y registro. Cada ejercicio del día
@@ -22,6 +32,12 @@ import { DaySession } from "@/lib/mock/types";
  * conecta con finishDay() (ya existente en el repositorio, ahora también
  * marca las series como hechas) y vuelve a Hoy, que en su próximo mount
  * lee getDashboardSummary() y ya refleja el entrenamiento completado.
+ *
+ * Sprint 3.9 — historial inmediato: debajo de cada ejercicio se muestra el
+ * último entrenamiento registrado (getExerciseHistory(), ya existente en
+ * el repositorio) y un indicador ▲/▼/= comparado contra lo que se está
+ * tipeando ahora mismo (compareExerciseToHistory(), nueva pero reutiliza
+ * exactamente los mismos datos — sin storage nuevo, sin Supabase).
  */
 export default function DiaPage({ params }: { params: Promise<{ weekId: string; dayId: string }> }) {
   const { weekId, dayId } = use(params);
@@ -30,10 +46,19 @@ export default function DiaPage({ params }: { params: Promise<{ weekId: string; 
   const router = useRouter();
 
   const [session, setSession] = useState<DaySession | null>(null);
+  const [history, setHistory] = useState<Record<string, ExerciseHistoryEntry | null>>({});
 
   useEffect(() => {
     if (!dayPlan) return;
     setSession(getDaySession(weekId, dayId));
+    setHistory(
+      Object.fromEntries(
+        dayPlan.exercises.map((prescription) => [
+          prescription.exerciseId,
+          getExerciseHistory(prescription.exerciseId, weekId, dayId),
+        ])
+      )
+    );
   }, [weekId, dayId, dayPlan]);
 
   if (!dayPlan || !week) {
@@ -85,6 +110,12 @@ export default function DiaPage({ params }: { params: Promise<{ weekId: string; 
             const registro = exerciseLog?.sets[0];
             if (!exercise) return null;
 
+            const ultimoEntrenamiento = history[prescription.exerciseId] ?? null;
+            const delta = compareExerciseToHistory(
+              { weight: registro?.weight ?? null, reps: registro?.reps ?? null },
+              ultimoEntrenamiento
+            );
+
             return (
               <Card key={prescription.exerciseId}>
                 <div className="flex items-start justify-between gap-3">
@@ -131,6 +162,38 @@ export default function DiaPage({ params }: { params: Promise<{ weekId: string; 
                       className="h-11 w-full mt-1 rounded-lg bg-bg-surface-raised border border-border-subtle px-3 text-sm placeholder:text-text-muted"
                     />
                   </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-border-subtle">
+                  <p className="text-text-muted text-[11px] uppercase tracking-wide font-display">
+                    Último entrenamiento
+                  </p>
+                  {ultimoEntrenamiento ? (
+                    <>
+                      <p className="text-text-secondary text-sm mt-1">
+                        {ultimoEntrenamiento.weight != null ? `${ultimoEntrenamiento.weight} kg` : "—"} ×{" "}
+                        {ultimoEntrenamiento.reps ?? "—"}
+                      </p>
+                      {delta.kind && (
+                        <p
+                          className={clsx(
+                            "text-xs font-medium mt-1",
+                            delta.kind === "equal" && "text-text-muted",
+                            delta.kind !== "equal" && delta.value > 0 && "text-success",
+                            delta.kind !== "equal" && delta.value < 0 && "text-danger"
+                          )}
+                        >
+                          {delta.kind === "equal"
+                            ? "= Igual que la última vez"
+                            : `${delta.value > 0 ? "▲" : "▼"} ${delta.value > 0 ? "+" : ""}${delta.value} ${
+                                delta.kind === "weight" ? "kg" : "repeticiones"
+                              }`}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-text-muted text-sm mt-1">Aún no hay registros anteriores.</p>
+                  )}
                 </div>
               </Card>
             );

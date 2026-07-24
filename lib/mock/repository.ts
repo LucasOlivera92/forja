@@ -1,6 +1,7 @@
 import { EXERCISE_CATALOG, MEAL_CATALOG, ROUTINE, ROUTINES } from "./data";
 import {
   AceroState,
+  CreateRoutineInput,
   DashboardSummary,
   DayPointer,
   DaySession,
@@ -33,6 +34,7 @@ import {
 const SESSION_KEY_PREFIX = "forja.session.";
 const MEALS_KEY_PREFIX = "forja.meals.";
 const HISTORY_KEY = "forja.history";
+const CUSTOM_ROUTINES_KEY = "forja.routines.custom";
 
 function todayKey(date?: string): string {
   return date ?? new Date().toISOString().slice(0, 10);
@@ -62,15 +64,46 @@ function writeJSON<T>(key: string, value: T): void {
 /* Catálogo: rutina / semanas / días / ejercicios                      */
 /* ------------------------------------------------------------------ */
 
-export function getRoutine(routineId: string = ROUTINE.id): Routine {
-  // Con multi-rutina real (Sprint 3.4) esto sería un SELECT por routineId
-  // contra la tabla `routines` — acá busca en el catálogo mock ROUTINES.
-  return ROUTINES.find((r) => r.id === routineId) ?? ROUTINE;
+/**
+ * Sprint 4.0 — rutinas creadas por el usuario desde /entreno/nueva, sin
+ * tocar Supabase todavía: viven en localStorage, separadas de las
+ * rutinas base de data.ts (que nunca se escriben, solo se leen).
+ */
+function getCustomRoutines(): Routine[] {
+  return readJSON<Routine[]>(CUSTOM_ROUTINES_KEY, []);
 }
 
-/** Catálogo completo de rutinas — usado por la pantalla /rutinas. */
+/**
+ * Crea una rutina propia con los 5 campos del formulario. Queda con
+ * `weeks: []` (sin ejercicios todavía) — el catálogo ya sabe mostrar
+ * rutinas vacías así, igual que Running Base/Básquet Inicial/Hipertrofia
+ * Full Body.
+ */
+export function createRoutine(input: CreateRoutineInput): Routine {
+  const routine: Routine = {
+    id: `routine-custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: input.name,
+    description: `Rutina personalizada · ${input.sport || "Sin deporte"} · ${input.goal || "Sin objetivo"}`,
+    sport: input.sport,
+    goal: input.goal,
+    weeksCount: input.weeksCount,
+    daysPerWeek: input.daysPerWeek,
+    weeks: [],
+  };
+  writeJSON(CUSTOM_ROUTINES_KEY, [...getCustomRoutines(), routine]);
+  return routine;
+}
+
+export function getRoutine(routineId: string = ROUTINE.id): Routine {
+  // Con multi-rutina real (Sprint 3.4) esto sería un SELECT por routineId
+  // contra la tabla `routines` — acá busca primero en el catálogo mock
+  // (ROUTINES) y después en las rutinas creadas por el usuario.
+  return getRoutines().find((r) => r.id === routineId) ?? ROUTINE;
+}
+
+/** Catálogo completo de rutinas (base + creadas por el usuario) — usado por la pantalla /entreno. */
 export function getRoutines(): Routine[] {
-  return ROUTINES;
+  return [...ROUTINES, ...getCustomRoutines()];
 }
 
 export function getWeeks(routineId?: string): RoutineWeek[] {
@@ -297,6 +330,34 @@ export function getExerciseProgressDelta(
   }
 
   return { kind: null, value: 0 };
+}
+
+/**
+ * Sprint 3.9 — Compara el registro que el usuario está tipeando ahora
+ * mismo (todavía sin marcar `done`, porque eso recién pasa al finalizar
+ * el día — Sprint 3.7) contra `getExerciseHistory()` — a diferencia de
+ * `getExerciseProgressDelta()` de arriba, que solo mira series ya hechas
+ * de la sesión de hoy. Pensada para la pantalla de registro: apenas el
+ * usuario carga peso/reps, ya puede ver si mejoró, empeoró o repitió
+ * respecto a la última vez.
+ */
+export function compareExerciseToHistory(
+  current: { weight: number | null; reps: number | null },
+  history: ExerciseHistoryEntry | null
+): ExerciseProgressDelta {
+  if (!history || current.weight == null || current.reps == null || history.weight == null || history.reps == null) {
+    return { kind: null, value: 0 };
+  }
+
+  if (current.weight !== history.weight) {
+    return { kind: "weight", value: Math.round((current.weight - history.weight) * 10) / 10 };
+  }
+
+  if (current.reps !== history.reps) {
+    return { kind: "reps", value: current.reps - history.reps };
+  }
+
+  return { kind: "equal", value: 0 };
 }
 
 export function getDaySummary(weekId: string, dayId: string, routineId: string = ROUTINE.id): DaySummary {

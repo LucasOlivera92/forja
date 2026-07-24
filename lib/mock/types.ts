@@ -57,6 +57,19 @@ export interface Routine {
   weeks: RoutineWeek[];
 }
 
+/**
+ * Sprint 4.0 — datos del formulario "Crear rutina" (/entreno/nueva). Sin
+ * ejercicios: la rutina se crea con `weeks: []` y queda igual que las
+ * demás rutinas todavía sin contenido en el catálogo.
+ */
+export interface CreateRoutineInput {
+  name: string;
+  goal: string;
+  sport: string;
+  weeksCount: number;
+  daysPerWeek: number;
+}
+
 /* ------------------------------------------------------------------ */
 /* Entreno — progreso (sesión real de un usuario en un día de rutina)  */
 /* ------------------------------------------------------------------ */
@@ -97,7 +110,8 @@ export interface ExerciseHistoryEntry {
   date: string;
 }
 
-export type ProgressDeltaKind = "weight" | "reps" | null;
+/** Sprint 3.9 — "equal" cubre el caso "=" (mismo peso y reps que la última vez). */
+export type ProgressDeltaKind = "weight" | "reps" | "equal" | null;
 
 export interface ExerciseProgressDelta {
   kind: ProgressDeltaKind;
