@@ -33,7 +33,7 @@ export default function HoyPage() {
     );
   }
 
-  const { workout, nutrition, aceroState, overallPercent, streak } = summary;
+  const { workout, nutrition, aceroState, weekProgress, streak } = summary;
   const pointer = getCurrentDayPointer();
   const entrenoHref = pointer ? `/entreno/${pointer.weekId}/${pointer.dayId}` : "/entreno";
 
@@ -55,7 +55,7 @@ export default function HoyPage() {
       </div>
 
       <Card raised>
-        <AceroElement state={aceroState} percent={overallPercent} />
+        <AceroElement state={aceroState} weekProgress={weekProgress} />
       </Card>
 
       <Link href={entrenoHref}>

@@ -15,6 +15,7 @@ import {
   RoutineDayPlan,
   RoutineWeek,
   SetEntry,
+  WeekProgress,
   WorkoutProgress,
 } from "./types";
 
@@ -172,9 +173,23 @@ export function toggleSetDone(
   return next;
 }
 
+/**
+ * Sprint 3.7 — Finalizar entrenamiento. Marca la sesión como terminada y,
+ * ya que el registro (Sprint 3.2) es un único peso/reps por ejercicio para
+ * todas sus series, da por completadas todas las series registradas: así
+ * `getWorkoutProgress`/`getDashboardSummary` (ya existentes, sin tocar)
+ * reflejan el 100% en Hoy apenas se vuelve a esa pantalla.
+ */
 export function finishDay(weekId: string, dayId: string, routineId: string = ROUTINE.id): DaySession {
   const session = touchSessionStart(getDaySession(weekId, dayId, routineId));
-  const next: DaySession = { ...session, finishedAt: new Date().toISOString() };
+  const next: DaySession = {
+    ...session,
+    finishedAt: new Date().toISOString(),
+    exercises: session.exercises.map((ex) => ({
+      ...ex,
+      sets: ex.sets.map((s) => ({ ...s, done: true })),
+    })),
+  };
   writeSession(next);
   if (next.date) syncHistory(next.date);
   return next;
@@ -432,10 +447,42 @@ function getStreak(): number {
   return streak;
 }
 
-function getAceroState(overallPercent: number): AceroState {
-  if (overallPercent >= 100) return "templado";
-  if (overallPercent > 0) return "calentando";
-  return "bruto";
+/**
+ * Sprint 3.8 — Progreso semanal (días de rutina completados / días totales
+ * de la semana activa), única fuente de verdad del estado visual del
+ * Acero. Reutiliza getWeekCompletion() ya existente — no agrega ningún
+ * tracking nuevo, solo lo combina.
+ *
+ * "Semana activa" = la última semana (en orden) que ya tiene al menos un
+ * día completado. No se usa directamente getCurrentDayPointer() acá,
+ * porque su semana salta a la próxima apenas se termina el 5to día — con
+ * ese criterio el Acero nunca llegaría a mostrarse en "forjado" (5/5): al
+ * completar el último día, saltaría directo a 0/5 de la semana siguiente.
+ */
+function getCurrentWeekProgress(routineId: string = ROUTINE.id): WeekProgress {
+  const weeks = getWeeks(routineId);
+  if (weeks.length === 0) return { completedDays: 0, totalDays: 0, percent: 0 };
+
+  let active = getWeekCompletion(weeks[0].id, routineId);
+  for (const week of weeks) {
+    const completion = getWeekCompletion(week.id, routineId);
+    if (completion.completedDays > 0) active = completion;
+  }
+
+  return {
+    completedDays: active.completedDays,
+    totalDays: active.totalDays,
+    percent: active.totalDays === 0 ? 0 : Math.round((active.completedDays / active.totalDays) * 100),
+  };
+}
+
+/** Los 6 estados del Acero, en orden de progreso semanal (0 a 5 de 5 días). */
+const ACERO_STAGES: AceroState[] = ["frio", "iniciando", "calentando", "en-forja", "casi-listo", "forjado"];
+
+function getAceroState(weekProgress: WeekProgress): AceroState {
+  if (weekProgress.totalDays === 0) return "frio";
+  const stageIndex = Math.round((weekProgress.completedDays / weekProgress.totalDays) * (ACERO_STAGES.length - 1));
+  return ACERO_STAGES[Math.min(Math.max(stageIndex, 0), ACERO_STAGES.length - 1)];
 }
 
 export function getDashboardSummary(date?: string): DashboardSummary {
@@ -443,13 +490,15 @@ export function getDashboardSummary(date?: string): DashboardSummary {
   const workout = getWorkoutProgress(key);
   const nutrition = getNutritionProgress(key);
   const overallPercent = Math.round((workout.percent + nutrition.percent) / 2);
+  const weekProgress = getCurrentWeekProgress();
 
   return {
     date: key,
     workout,
     nutrition,
     overallPercent,
-    aceroState: getAceroState(overallPercent),
+    weekProgress,
+    aceroState: getAceroState(weekProgress),
     streak: getStreak(),
   };
 }

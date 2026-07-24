@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { Card } from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
-import { getDayPlan, getDaySession, getExercise, getWeek, updateExerciseSet } from "@/lib/mock/repository";
+import { finishDay, getDayPlan, getDaySession, getExercise, getWeek, updateExerciseSet } from "@/lib/mock/repository";
 import { DaySession } from "@/lib/mock/types";
 
 /**
@@ -15,13 +16,18 @@ import { DaySession } from "@/lib/mock/types";
  * prescriptas, para que cargar el entrenamiento sea rápido desde el
  * celular. Por debajo se sigue guardando por serie (misma sesión de
  * lib/mock/repository.ts, sin tocar esa arquitectura) — la simplificación
- * es solo de la pantalla. Todavía sin historial, comparación con semanas
- * anteriores, progreso ni resumen final — eso es Sprint 3.3.
+ * es solo de la pantalla.
+ *
+ * Sprint 3.7 — botón "Finalizar entrenamiento" al final de la lista:
+ * conecta con finishDay() (ya existente en el repositorio, ahora también
+ * marca las series como hechas) y vuelve a Hoy, que en su próximo mount
+ * lee getDashboardSummary() y ya refleja el entrenamiento completado.
  */
 export default function DiaPage({ params }: { params: Promise<{ weekId: string; dayId: string }> }) {
   const { weekId, dayId } = use(params);
   const dayPlan = getDayPlan(weekId, dayId);
   const week = getWeek(weekId);
+  const router = useRouter();
 
   const [session, setSession] = useState<DaySession | null>(null);
 
@@ -52,6 +58,12 @@ export default function DiaPage({ params }: { params: Promise<{ weekId: string; 
       updateExerciseSet(weekId, dayId, exerciseId, setNumber, patch);
     }
     setSession(getDaySession(weekId, dayId));
+  }
+
+  /** Guarda la sesión como finalizada y vuelve a Hoy, que ya lee el progreso actualizado. */
+  function handleFinish() {
+    finishDay(weekId, dayId);
+    router.push("/hoy");
   }
 
   return (
@@ -124,6 +136,10 @@ export default function DiaPage({ params }: { params: Promise<{ weekId: string; 
             );
           })}
       </div>
+
+      <Button type="button" variant="primary" onClick={handleFinish}>
+        Finalizar entrenamiento
+      </Button>
     </div>
   );
 }

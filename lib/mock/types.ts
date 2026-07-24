@@ -153,13 +153,26 @@ export interface NutritionProgress {
 /* Dashboard                                                            */
 /* ------------------------------------------------------------------ */
 
-export type AceroState = "bruto" | "calentando" | "templado";
+/**
+ * Sprint 3.8 — 6 estados del Acero, atados al progreso semanal (días de
+ * rutina completados / días totales de la semana), no al progreso diario.
+ */
+export type AceroState = "frio" | "iniciando" | "calentando" | "en-forja" | "casi-listo" | "forjado";
+
+/** Progreso de la semana activa de la rutina — misma forma que ya devuelve getWeekCompletion(), con el percent ya resuelto. */
+export interface WeekProgress {
+  completedDays: number;
+  totalDays: number;
+  percent: number;
+}
 
 export interface DashboardSummary {
   date: string;
   workout: WorkoutProgress;
   nutrition: NutritionProgress;
   overallPercent: number;
+  /** Progreso semanal (Sprint 3.8) — fuente de verdad del estado visual del Acero. */
+  weekProgress: WeekProgress;
   aceroState: AceroState;
   streak: number;
 }

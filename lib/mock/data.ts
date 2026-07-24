@@ -52,94 +52,246 @@ export const EXERCISE_CATALOG: ExerciseCatalogItem[] = [
   { id: "ex-biceps-barra-prona", name: "Bíceps con Barra Toma Prona", muscleGroup: "Bíceps", videoUrl: "https://www.youtube.com/shorts/-lJFZ5cRaRM", description: "Curl de bíceps con barra en agarre prono (reverse curl), suma antebrazo.", equipment: "Barra", exerciseType: "Aislamiento" },
 ];
 
-/** Objetivo (series x reps) de un ejercicio para una semana puntual. */
-interface WeekTarget {
+/**
+ * Sprint 3.6 — Prescripción semanal real por ejercicio.
+ *
+ * Cada ejercicio guarda su propia prescripción (series x reps) para cada
+ * una de las 4 semanas, como 4 objetos explícitos e independientes — no
+ * hay ninguna función que genere o comparta un patrón entre ejercicios.
+ * Cambiar la semana 3 de un ejercicio no puede afectar a ningún otro
+ * ejercicio ni a otra semana: cada valor está escrito una sola vez, en un
+ * solo lugar, tal como figura en la rutina original (Plan_El_Toro_1).
+ */
+interface WeekPrescription {
+  week: number;
   sets: number;
   reps: string;
 }
 
 /**
- * Ejercicio dentro de la plantilla de un día, con su progresión semana a
- * semana ya definida — nada de esto se calcula ni se infiere, sale
- * directo de la rutina original (Plan_El_Toro_1). `progression[i]` es el
- * objetivo de la semana `i + 1`.
+ * Ejercicio dentro de un día, con su propia prescripción semana a semana
+ * (`weeks`, siempre longitud 4 — una entrada explícita por semana).
  */
 interface DayExerciseTemplate {
   exerciseId: string;
   order: number;
-  progression: WeekTarget[];
+  weeks: WeekPrescription[];
 }
 
-/** Progresión estándar del plan: mismas 4 series todas las semanas, reps variable. */
-function progression(reps1: string, reps2: string, reps3: string, reps4: string, sets = 4): WeekTarget[] {
-  return [reps1, reps2, reps3, reps4].map((reps) => ({ sets, reps }));
-}
-
-function dayExercise(exerciseId: string, order: number, progressionForExercise: WeekTarget[]): DayExerciseTemplate {
-  return { exerciseId, order, progression: progressionForExercise };
+function dayExercise(exerciseId: string, order: number, weeks: WeekPrescription[]): DayExerciseTemplate {
+  return { exerciseId, order, weeks };
 }
 
 /**
- * Plantilla del split semanal (5 días, 6 ejercicios cada uno), con la
- * progresión real de series/reps semana a semana tal como está definida en
- * la rutina original. Se reutiliza para generar las 4 semanas de la
- * rutina activa sin duplicar la data: cada semana resuelve su propio
- * objetivo (`resolvePrescription`) a partir de esta misma plantilla.
+ * Split semanal (5 días, 6 ejercicios cada uno). Cada ejercicio define su
+ * propio arreglo de 4 prescripciones (semana 1 a 4) de forma literal e
+ * independiente, lista para que una rutina futura tenga cualquier
+ * combinación de series/reps por semana sin heredar nada de otro ejercicio.
  */
 const DAY_TEMPLATES: Array<{ name: string; exercises: DayExerciseTemplate[] }> = [
   {
     name: "Empuje / Hombro",
     exercises: [
-      dayExercise("ex-press-plano-barra", 1, progression("10", "8", "6", "12")),
-      dayExercise("ex-dominadas-prona", 2, progression("10", "8", "6", "12")),
-      dayExercise("ex-hombro-z-press", 3, progression("10", "8", "6", "12")),
-      dayExercise("ex-frances-polea-trasnuca", 4, progression("15", "12", "10", "15")),
-      dayExercise("ex-biceps-neutra-barra", 5, progression("15", "12", "10", "15")),
-      dayExercise("ex-laterales-frontales-mancuerna", 6, progression("15", "12", "10", "15")),
+      dayExercise("ex-press-plano-barra", 1, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-dominadas-prona", 2, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-hombro-z-press", 3, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-frances-polea-trasnuca", 4, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
+      dayExercise("ex-biceps-neutra-barra", 5, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
+      dayExercise("ex-laterales-frontales-mancuerna", 6, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
     ],
   },
   {
     name: "Pecho / Espalda + Core",
     exercises: [
-      dayExercise("ex-maquina-pecho-1-brazo", 1, progression("10", "8", "6", "12")),
-      dayExercise("ex-remo-menton-1-pie", 2, progression("10", "8", "6", "12")),
-      dayExercise("ex-remo-t-semi-prono", 3, progression("10", "8", "6", "12")),
-      dayExercise("ex-biceps-media-esfera-barra", 4, progression("15", "12", "10", "15")),
-      dayExercise("ex-t2b-plancha-antebrazo", 5, progression('12 + 40"', '14 + 40"', '14 + 40"', '12 + 40"')),
-      dayExercise("ex-press-frances-w-acostado", 6, progression("15", "12", "10", "15")),
+      dayExercise("ex-maquina-pecho-1-brazo", 1, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-remo-menton-1-pie", 2, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-remo-t-semi-prono", 3, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-biceps-media-esfera-barra", 4, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
+      dayExercise("ex-t2b-plancha-antebrazo", 5, [
+        { week: 1, sets: 4, reps: '12 + 40"' },
+        { week: 2, sets: 4, reps: '14 + 40"' },
+        { week: 3, sets: 4, reps: '14 + 40"' },
+        { week: 4, sets: 4, reps: '12 + 40"' },
+      ]),
+      dayExercise("ex-press-frances-w-acostado", 6, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
     ],
   },
   {
     name: "Hombro / Pecho + Potencia",
     exercises: [
-      dayExercise("ex-press-hombro-parado-trasnuca", 1, progression("10", "8", "6", "12")),
-      dayExercise("ex-press-pecho-mancuerna-1-brazo-puente", 2, progression("10", "8", "6", "12")),
-      dayExercise("ex-remo-1-brazo-ghd", 3, progression("10", "8", "6", "12")),
-      dayExercise("ex-hang-power-clean", 4, progression("6", "4", "2", "8")),
-      dayExercise("ex-biceps-pared-mancuernas-supino", 5, progression("15", "12", "10", "15")),
-      dayExercise("ex-fondos-anillas", 6, progression("10", "8", "6", "12")),
+      dayExercise("ex-press-hombro-parado-trasnuca", 1, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-press-pecho-mancuerna-1-brazo-puente", 2, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-remo-1-brazo-ghd", 3, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-hang-power-clean", 4, [
+        { week: 1, sets: 4, reps: "6" },
+        { week: 2, sets: 4, reps: "4" },
+        { week: 3, sets: 4, reps: "2" },
+        { week: 4, sets: 4, reps: "8" },
+      ]),
+      dayExercise("ex-biceps-pared-mancuernas-supino", 5, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
+      dayExercise("ex-fondos-anillas", 6, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
     ],
   },
   {
     name: "Espalda / Core Rotacional",
     exercises: [
-      dayExercise("ex-press-landmine-estocada", 1, progression("10", "8", "6", "12")),
-      dayExercise("ex-remo-renegado-mancuernas", 2, progression("10", "8", "6", "12")),
-      dayExercise("ex-australian-row-1-brazo", 3, progression("10", "8", "6", "12")),
-      dayExercise("ex-remo-plancha-lateral-1-brazo", 4, progression("10/10", "10/10", "10/10", "10/10")),
-      dayExercise("ex-pull-over-media-esfera-mancuerna", 5, progression("15", "12", "10", "15")),
-      dayExercise("ex-vuelos-posteriores-peck-deck", 6, progression("15", "12", "10", "15")),
+      dayExercise("ex-press-landmine-estocada", 1, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-remo-renegado-mancuernas", 2, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-australian-row-1-brazo", 3, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-remo-plancha-lateral-1-brazo", 4, [
+        { week: 1, sets: 4, reps: "10/10" },
+        { week: 2, sets: 4, reps: "10/10" },
+        { week: 3, sets: 4, reps: "10/10" },
+        { week: 4, sets: 4, reps: "10/10" },
+      ]),
+      dayExercise("ex-pull-over-media-esfera-mancuerna", 5, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
+      dayExercise("ex-vuelos-posteriores-peck-deck", 6, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
     ],
   },
   {
     name: "Espalda / Potencia + Hombro",
     exercises: [
-      dayExercise("ex-remo-barra-landmine", 1, progression("10", "8", "6", "12")),
-      dayExercise("ex-split-jerk", 2, progression("6", "4", "2", "8")),
-      dayExercise("ex-rope-climb-manos", 3, progression("2", "3", "4", "5")),
-      dayExercise("ex-face-pull-soga", 4, progression("15", "12", "10", "15")),
-      dayExercise("ex-aperturas-peck-deck", 5, progression("15", "12", "10", "15")),
-      dayExercise("ex-biceps-barra-prona", 6, progression("15", "12", "10", "15")),
+      dayExercise("ex-remo-barra-landmine", 1, [
+        { week: 1, sets: 4, reps: "10" },
+        { week: 2, sets: 4, reps: "8" },
+        { week: 3, sets: 4, reps: "6" },
+        { week: 4, sets: 4, reps: "12" },
+      ]),
+      dayExercise("ex-split-jerk", 2, [
+        { week: 1, sets: 4, reps: "6" },
+        { week: 2, sets: 4, reps: "4" },
+        { week: 3, sets: 4, reps: "2" },
+        { week: 4, sets: 4, reps: "8" },
+      ]),
+      dayExercise("ex-rope-climb-manos", 3, [
+        { week: 1, sets: 4, reps: "2" },
+        { week: 2, sets: 4, reps: "3" },
+        { week: 3, sets: 4, reps: "4" },
+        { week: 4, sets: 4, reps: "5" },
+      ]),
+      dayExercise("ex-face-pull-soga", 4, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
+      dayExercise("ex-aperturas-peck-deck", 5, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
+      dayExercise("ex-biceps-barra-prona", 6, [
+        { week: 1, sets: 4, reps: "15" },
+        { week: 2, sets: 4, reps: "12" },
+        { week: 3, sets: 4, reps: "10" },
+        { week: 4, sets: 4, reps: "15" },
+      ]),
     ],
   },
 ];
@@ -147,9 +299,9 @@ const DAY_TEMPLATES: Array<{ name: string; exercises: DayExerciseTemplate[] }> =
 const ROUTINE_ID = "routine-forja-basico";
 const WEEK_COUNT = 4;
 
-/** Resuelve el objetivo real (series x reps) de un ejercicio para una semana puntual. */
-function resolvePrescription(template: DayExerciseTemplate, weekIndex: number): ExercisePrescription {
-  const target = template.progression[weekIndex] ?? template.progression[template.progression.length - 1];
+/** Resuelve la prescripción propia del ejercicio para una semana puntual (por número de semana, no por índice). */
+function resolvePrescription(template: DayExerciseTemplate, weekNumber: number): ExercisePrescription {
+  const target = template.weeks.find((w) => w.week === weekNumber) ?? template.weeks[template.weeks.length - 1];
   return { exerciseId: template.exerciseId, order: template.order, targetSets: target.sets, targetReps: target.reps };
 }
 
@@ -164,7 +316,7 @@ function buildWeeks(routineId: string): RoutineWeek[] {
       routineId,
       order: dayIndex + 1,
       name: template.name,
-      exercises: template.exercises.map((exerciseTemplate) => resolvePrescription(exerciseTemplate, weekIndex)),
+      exercises: template.exercises.map((exerciseTemplate) => resolvePrescription(exerciseTemplate, weekNumber)),
     }));
 
     return {
