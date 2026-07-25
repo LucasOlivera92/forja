@@ -1,4 +1,4 @@
-import { EXERCISE_CATALOG, MEAL_CATALOG, ROUTINE, ROUTINE_TEMPLATES, ROUTINES } from "./data";
+import { EXERCISE_CATALOG, MEAL_CATALOG, ROUTINE, ROUTINE_SPLITS, ROUTINE_TEMPLATES, ROUTINES } from "./data";
 import {
   AceroState,
   AddExerciseInput,
@@ -17,6 +17,7 @@ import {
   Routine,
   RoutineDayPlan,
   RoutineExecution,
+  RoutineSplitCategory,
   RoutineTemplate,
   RoutineWeek,
   SetEntry,
@@ -144,6 +145,11 @@ function buildTemplateWeeks(routine: Routine, weekNames: string[], dayNames: str
  * materializados (mismo `buildTemplateWeeks` de arriba) en vez de
  * `weeks: []`. Sin plantilla, el comportamiento es exactamente el mismo
  * de siempre.
+ *
+ * Sprint 4.9 — Si `input.splitCategory` viene, se guarda tal cual en
+ * `Routine.splitCategory` — solo una etiqueta para que el constructor
+ * pueda mostrar después "Grupo sugerido" por día (`getSuggestedMuscleGroup`).
+ * No cambia `weeks`, ni ningún otro campo: es puramente informativo.
  */
 export function createRoutine(input: CreateRoutineInput): Routine {
   const base: Routine = {
@@ -155,6 +161,7 @@ export function createRoutine(input: CreateRoutineInput): Routine {
     weeksCount: input.weeksCount,
     daysPerWeek: input.daysPerWeek,
     weeks: [],
+    splitCategory: input.splitCategory,
   };
 
   const useTemplate =
@@ -174,6 +181,35 @@ export function createRoutine(input: CreateRoutineInput): Routine {
 /** Sprint 4.6 — "Plantillas FORJA" fijas (sin ejercicios) para el flujo "Crear rutina". */
 export function getRoutineTemplates(): RoutineTemplate[] {
   return ROUTINE_TEMPLATES;
+}
+
+/** Sprint 4.9 — distribuciones sugeridas de grupo muscular por categoría/cantidad de días, para la pantalla "Crear rutina". */
+export function getRoutineSplits(): Record<RoutineSplitCategory, Record<number, string[]>> {
+  return ROUTINE_SPLITS;
+}
+
+/**
+ * Sprint 4.9 — Grupo muscular sugerido para el día `dayOrder` (1-based)
+ * de UNA rutina ya conocida (`routine.splitCategory` + `routine.daysPerWeek`).
+ * Función PURA (no lee localStorage) a propósito: las pantallas del
+ * constructor ya tienen la rutina cargada en estado (fetcheada en su
+ * propio `useEffect`, como toda lectura de localStorage en esta app), así
+ * que pueden llamar a esta versión directamente en el render sin ningún
+ * riesgo de mismatch de hidratación. Único lugar donde se hace este
+ * lookup (`ROUTINE_SPLITS[categoría]?.[daysPerWeek]?.[orden-1]`) — nadie
+ * más lo repite. Devuelve `null` si la rutina no eligió categoría, o si
+ * esa categoría no tiene distribución definida para su cantidad de días
+ * (ej: "Personalizada", o más de 6 días).
+ */
+export function getSuggestedMuscleGroupForRoutine(routine: Routine, dayOrder: number): string | null {
+  if (!routine.splitCategory) return null;
+  const distribution = ROUTINE_SPLITS[routine.splitCategory]?.[routine.daysPerWeek];
+  return distribution?.[dayOrder - 1] ?? null;
+}
+
+/** Igual que `getSuggestedMuscleGroupForRoutine`, pero recibiendo `routineId` en vez de la rutina ya cargada (busca con `getRoutine`, que sí lee localStorage). */
+export function getSuggestedMuscleGroup(routineId: string, dayOrder: number): string | null {
+  return getSuggestedMuscleGroupForRoutine(getRoutine(routineId), dayOrder);
 }
 
 export function getRoutine(routineId: string = ROUTINE.id): Routine {

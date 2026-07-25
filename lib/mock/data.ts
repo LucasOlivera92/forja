@@ -4,6 +4,7 @@ import {
   MealCatalogItem,
   Routine,
   RoutineDayPlan,
+  RoutineSplitCategory,
   RoutineTemplate,
   RoutineWeek,
 } from "./types";
@@ -135,6 +136,68 @@ export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
     dayNames: ["Fundamentos", "Técnica Individual", "Scrimmage"],
   },
 ];
+
+/**
+ * Sprint 4.9 — "Plantillas inteligentes de distribución muscular": guía
+ * puramente informativa, distinta de `ROUTINE_TEMPLATES` (que arma
+ * semanas/días completos). Acá solo se sugiere, para cada categoría, qué
+ * grupo muscular corresponde a cada día según la cantidad de días de
+ * entrenamiento (1 a 6) — nunca se aplica sola, ni autocompleta nada; la
+ * UI solo la muestra como referencia (pantalla de creación) o como
+ * subtítulo por día (constructor), y deja de mostrarla apenas el usuario
+ * personaliza el nombre de ese día. "Personalizada" queda vacía a
+ * propósito: es la opción de "sin guía".
+ */
+export const ROUTINE_SPLITS: Record<RoutineSplitCategory, Record<number, string[]>> = {
+  Hipertrofia: {
+    1: ["Full Body"],
+    2: ["Tren Superior", "Tren Inferior"],
+    3: ["Empuje", "Tracción", "Piernas"],
+    4: ["Pecho + Tríceps", "Espalda + Bíceps", "Piernas", "Hombros + Core"],
+    5: ["Pecho + Tríceps", "Espalda + Bíceps", "Piernas", "Hombros", "Upper"],
+    6: ["Pecho", "Espalda", "Piernas", "Hombros", "Brazos", "Core"],
+  },
+  Fuerza: {
+    1: ["Full Body"],
+    2: ["Tren Superior", "Tren Inferior"],
+    3: ["Sentadilla", "Press Banca", "Peso Muerto"],
+    4: ["Sentadilla", "Press Banca", "Peso Muerto", "Accesorios"],
+    5: ["Sentadilla", "Press Banca", "Peso Muerto", "Press Militar", "Accesorios"],
+    6: [
+      "Sentadilla",
+      "Press Banca",
+      "Peso Muerto",
+      "Press Militar",
+      "Accesorios Tren Superior",
+      "Accesorios Tren Inferior",
+    ],
+  },
+  Definición: {
+    1: ["Full Body + Cardio"],
+    2: ["Tren Superior + Cardio", "Tren Inferior + Cardio"],
+    3: ["Empuje + Cardio", "Tracción + Cardio", "Piernas + Cardio"],
+    4: ["Pecho + Tríceps", "Espalda + Bíceps", "Piernas", "Hombros + Cardio"],
+    5: ["Pecho + Tríceps", "Espalda + Bíceps", "Piernas", "Hombros", "Cardio + Core"],
+    6: ["Pecho", "Espalda", "Piernas", "Hombros", "Brazos", "Cardio + Core"],
+  },
+  Running: {
+    1: ["Rodaje Suave"],
+    2: ["Rodaje Suave", "Series"],
+    3: ["Rodaje Suave", "Series", "Rodaje Largo"],
+    4: ["Rodaje Suave", "Series", "Rodaje Largo", "Regenerativo"],
+    5: ["Rodaje Suave", "Series", "Fartlek", "Rodaje Largo", "Regenerativo"],
+    6: ["Rodaje Suave", "Series", "Fartlek", "Rodaje Largo", "Regenerativo", "Fuerza"],
+  },
+  Básquet: {
+    1: ["Fundamentos"],
+    2: ["Fundamentos", "Físico"],
+    3: ["Fundamentos", "Técnica Individual", "Scrimmage"],
+    4: ["Fundamentos", "Técnica Individual", "Físico", "Scrimmage"],
+    5: ["Fundamentos", "Técnica Individual", "Físico", "Táctica", "Scrimmage"],
+    6: ["Fundamentos", "Técnica Individual", "Físico", "Táctica", "Tiro", "Scrimmage"],
+  },
+  Personalizada: {},
+};
 
 /**
  * Sprint 3.6 — Prescripción semanal real por ejercicio.

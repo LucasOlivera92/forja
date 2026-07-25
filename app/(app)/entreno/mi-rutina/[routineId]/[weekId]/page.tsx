@@ -8,10 +8,12 @@ import { clsx } from "@/shared/utils/clsx";
 import {
   clearCustomRoutineDay,
   duplicateCustomRoutineDay,
+  getRoutine,
+  getSuggestedMuscleGroupForRoutine,
   getWeek,
   renameCustomRoutineDay,
 } from "@/lib/mock/repository";
-import { RoutineWeek } from "@/lib/mock/types";
+import { Routine, RoutineWeek } from "@/lib/mock/types";
 
 /**
  * Sprint 4.1 — Días de una semana de una rutina PROPIA.
@@ -23,6 +25,14 @@ import { RoutineWeek } from "@/lib/mock/types";
  * ahora se muestra siempre ("0 ejercicios", "3 ejercicios", etc.), para
  * poder ver de un vistazo el estado de la semana sin entrar a cada día.
  * Solo aplica acá (rutinas propias); "El Toro" no se toca.
+ *
+ * Sprint 4.9 — si la rutina eligió una "guía de distribución muscular"
+ * al crearse (`routine.splitCategory`), cada día sin nombre propio
+ * todavía muestra un subtítulo "Grupo sugerido: {grupo}" debajo del
+ * título (`getSuggestedMuscleGroupForRoutine`, puramente informativo).
+ * Apenas el usuario le pone un nombre propio al día (`displayName`), la
+ * sugerencia deja de mostrarse para ese día — se considera "ya
+ * personalizado".
  */
 export default function MiRutinaSemanaPage({
   params,
@@ -31,16 +41,19 @@ export default function MiRutinaSemanaPage({
 }) {
   const { routineId, weekId } = use(params);
   const [week, setWeek] = useState<RoutineWeek | null | undefined>(undefined);
+  const [routine, setRoutine] = useState<Routine | null>(null);
   const [renamingDayId, setRenamingDayId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [duplicatingDayId, setDuplicatingDayId] = useState<string | null>(null);
 
   function refresh() {
     setWeek(getWeek(weekId, routineId) ?? null);
+    setRoutine(getRoutine(routineId));
   }
 
   useEffect(() => {
     setWeek(getWeek(weekId, routineId) ?? null);
+    setRoutine(getRoutine(routineId));
   }, [routineId, weekId]);
 
   if (week === undefined) {
@@ -146,6 +159,8 @@ export default function MiRutinaSemanaPage({
           }
 
           const otherDays = days.filter((d) => d.id !== day.id);
+          const suggestedGroup =
+            routine && !day.displayName ? getSuggestedMuscleGroupForRoutine(routine, day.order) : null;
 
           return (
             <Card key={day.id}>
@@ -156,6 +171,13 @@ export default function MiRutinaSemanaPage({
                 >
                   <p className="text-text-muted text-xs uppercase tracking-wide font-display">Día {day.order}</p>
                   <p className="text-text-primary text-sm font-medium mt-1">{label}</p>
+                  {suggestedGroup && (
+                    <p className="text-text-muted text-[11px] mt-1">
+                      Grupo sugerido:
+                      <br />
+                      {suggestedGroup}
+                    </p>
+                  )}
                   <p className="text-text-muted text-xs mt-1">{day.exercises.length} ejercicios</p>
                 </Link>
               </div>

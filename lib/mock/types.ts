@@ -78,7 +78,17 @@ export interface Routine {
   weeksCount: number;
   daysPerWeek: number;
   weeks: RoutineWeek[];
+  /**
+   * Sprint 4.9 — categoría de distribución muscular elegida (opcional) al
+   * crear la rutina, solo para mostrar sugerencias informativas en el
+   * constructor ("Grupo sugerido"). No afecta nombres, ejercicios ni
+   * ningún otro campo — puramente informativo.
+   */
+  splitCategory?: RoutineSplitCategory;
 }
+
+/** Sprint 4.9 — las 6 categorías fijas de "Plantillas inteligentes de distribución muscular". */
+export type RoutineSplitCategory = "Hipertrofia" | "Fuerza" | "Definición" | "Running" | "Básquet" | "Personalizada";
 
 /**
  * Sprint 4.0 — datos del formulario "Crear rutina" (/entreno/nueva). Sin
@@ -99,6 +109,14 @@ export interface CreateRoutineInput {
    */
   weekNames?: string[];
   dayNames?: string[];
+  /**
+   * Sprint 4.9 — categoría de distribución muscular sugerida (opcional),
+   * elegida como guía informativa en la pantalla de creación. Si viene,
+   * queda guardada en `Routine.splitCategory` para que el constructor
+   * pueda mostrar "Grupo sugerido" por día. No autocompleta ningún otro
+   * campo.
+   */
+  splitCategory?: RoutineSplitCategory;
 }
 
 /**

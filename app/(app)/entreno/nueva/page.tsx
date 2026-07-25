@@ -6,10 +6,19 @@ import { useState } from "react";
 import { Card } from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
 import { clsx } from "@/shared/utils/clsx";
-import { createRoutine, getRoutineTemplates } from "@/lib/mock/repository";
-import { RoutineTemplate } from "@/lib/mock/types";
+import { createRoutine, getRoutineSplits, getRoutineTemplates } from "@/lib/mock/repository";
+import { RoutineSplitCategory, RoutineTemplate } from "@/lib/mock/types";
 
 type CreationMode = "cero" | "plantilla";
+
+const SPLIT_CATEGORIES: RoutineSplitCategory[] = [
+  "Hipertrofia",
+  "Fuerza",
+  "Definición",
+  "Running",
+  "Básquet",
+  "Personalizada",
+];
 
 /**
  * Sprint 4.0 — Formulario mínimo para crear una rutina propia desde la
@@ -27,10 +36,21 @@ type CreationMode = "cero" | "plantilla";
  * `ROUTINE_TEMPLATES` (lib/mock/data.ts) y nunca traen ejercicios, solo
  * nombres de semana/día — la lógica de qué hacer con esos nombres vive
  * en el repositorio (`createRoutine`), no acá.
+ *
+ * Sprint 4.9 — "Guía de distribución muscular" (opcional): debajo de
+ * "Cantidad de días" se puede elegir una categoría (Hipertrofia, Fuerza,
+ * Definición, Running, Básquet o Personalizada) para ver, solo a modo
+ * informativo, qué grupo muscular sugiere `ROUTINE_SPLITS` para cada día
+ * según la cantidad elegida. No autocompleta nombre/semanas/días ni nada
+ * — es un dato aparte de `ROUTINE_TEMPLATES` (que sí arma la rutina
+ * completa). Si el usuario guarda con una categoría elegida, queda
+ * guardada en `Routine.splitCategory` solo para que el constructor
+ * pueda mostrar después "Grupo sugerido" por día.
  */
 export default function NuevaRutinaPage() {
   const router = useRouter();
   const templates = getRoutineTemplates();
+  const splits = getRoutineSplits();
 
   const [mode, setMode] = useState<CreationMode>("cero");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -42,8 +62,11 @@ export default function NuevaRutinaPage() {
   const [sport, setSport] = useState("");
   const [weeksCount, setWeeksCount] = useState("4");
   const [daysPerWeek, setDaysPerWeek] = useState("5");
+  const [splitCategory, setSplitCategory] = useState<RoutineSplitCategory | null>(null);
 
   const canSave = name.trim().length > 0;
+  const daysNum = Math.max(1, Number(daysPerWeek) || 0);
+  const suggestedDistribution = splitCategory ? (splits[splitCategory]?.[daysNum] ?? null) : null;
 
   function selectMode(next: CreationMode) {
     setMode(next);
@@ -80,6 +103,7 @@ export default function NuevaRutinaPage() {
       daysPerWeek: daysNum,
       weekNames: templateStillValid ? (weekNames as string[]) : undefined,
       dayNames: templateStillValid ? (dayNames as string[]) : undefined,
+      splitCategory: splitCategory ?? undefined,
     });
     router.push("/entreno");
   }
@@ -197,6 +221,50 @@ export default function NuevaRutinaPage() {
               className="h-11 w-full mt-1 rounded-lg bg-bg-surface-raised border border-border-subtle px-3 text-sm placeholder:text-text-muted"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="text-text-muted text-[11px] uppercase tracking-wide font-display">
+            Guía de distribución muscular (opcional)
+          </label>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {SPLIT_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSplitCategory(cat === splitCategory ? null : cat)}
+                className={clsx(
+                  "h-9 px-4 rounded-full text-xs font-display uppercase tracking-wide border transition-colors",
+                  cat === splitCategory
+                    ? "bg-accent-primary border-accent-primary text-white"
+                    : "bg-transparent border-border-subtle text-text-secondary"
+                )}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {splitCategory && (
+            <div className="mt-3 pt-3 border-t border-border-subtle">
+              <p className="text-text-muted text-[11px] uppercase tracking-wide font-display mb-1">
+                Distribución sugerida
+              </p>
+              {suggestedDistribution ? (
+                <div className="flex flex-col gap-0.5">
+                  {suggestedDistribution.map((group, index) => (
+                    <p key={index} className="text-text-secondary text-sm">
+                      Día {index + 1} → {group}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-text-muted text-sm">
+                  No hay sugerencia para {daysNum} {daysNum === 1 ? "día" : "días"}.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </Card>
 

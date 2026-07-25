@@ -10,11 +10,13 @@ import {
   duplicateCustomRoutineExercise,
   getDayPlan,
   getExercise,
+  getRoutine,
+  getSuggestedMuscleGroupForRoutine,
   getWeeks,
   moveCustomRoutineExercise,
   updateCustomRoutineExercise,
 } from "@/lib/mock/repository";
-import { RoutineDayPlan, RoutineWeek } from "@/lib/mock/types";
+import { Routine, RoutineDayPlan, RoutineWeek } from "@/lib/mock/types";
 
 /**
  * Sprint 4.1 — Día de una rutina PROPIA: lista los ejercicios ya
@@ -35,6 +37,11 @@ import { RoutineDayPlan, RoutineWeek } from "@/lib/mock/types";
  * eso ni siquiera vive en `Routine.weeks`). También se corrige la
  * validación del editor de ejercicios: ya no se puede guardar con series
  * en 0 o repeticiones vacías/"0" (antes se dejaban pasar en silencio).
+ *
+ * Sprint 4.9 — si la rutina eligió una "guía de distribución muscular" al
+ * crearse, se muestra un subtítulo "Grupo sugerido: {grupo}" debajo del
+ * título del día, mientras el día no tenga `displayName` propio (se oculta
+ * apenas el usuario lo renombra desde la pantalla de la semana).
  */
 export default function MiRutinaDiaPage({
   params,
@@ -44,6 +51,7 @@ export default function MiRutinaDiaPage({
   const { routineId, weekId, dayId } = use(params);
   const [dayPlan, setDayPlan] = useState<RoutineDayPlan | null | undefined>(undefined);
   const [weeks, setWeeks] = useState<RoutineWeek[]>([]);
+  const [routine, setRoutine] = useState<Routine | null>(null);
   const [editingOrder, setEditingOrder] = useState<number | null>(null);
   const [editSets, setEditSets] = useState("");
   const [editReps, setEditReps] = useState("");
@@ -56,11 +64,13 @@ export default function MiRutinaDiaPage({
   function refresh() {
     setDayPlan(getDayPlan(weekId, dayId, routineId) ?? null);
     setWeeks(getWeeks(routineId));
+    setRoutine(getRoutine(routineId));
   }
 
   useEffect(() => {
     setDayPlan(getDayPlan(weekId, dayId, routineId) ?? null);
     setWeeks(getWeeks(routineId));
+    setRoutine(getRoutine(routineId));
   }, [routineId, weekId, dayId]);
 
   if (dayPlan === undefined) {
@@ -83,6 +93,8 @@ export default function MiRutinaDiaPage({
   }
 
   const exercises = dayPlan.exercises.slice().sort((a, b) => a.order - b.order);
+  const suggestedGroup =
+    routine && !dayPlan.displayName ? getSuggestedMuscleGroupForRoutine(routine, dayPlan.order) : null;
 
   function startEdit(order: number) {
     const exercise = exercises.find((ex) => ex.order === order);
@@ -163,6 +175,13 @@ export default function MiRutinaDiaPage({
           ← Volver
         </Link>
         <h1 className="text-2xl font-display font-semibold mt-1">{dayPlan.name}</h1>
+        {suggestedGroup && (
+          <p className="text-text-muted text-[11px] mt-1">
+            Grupo sugerido:
+            <br />
+            {suggestedGroup}
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-3">
