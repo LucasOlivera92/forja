@@ -287,6 +287,59 @@ export interface NutritionProgress {
 }
 
 /* ------------------------------------------------------------------ */
+/* Nutrición — motor del plan nutricional (Sprint 5.0)                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sprint 5.0 — Perfil nutricional único del usuario. Es el "motor" sobre
+ * el que Sprint 5.1 va a generar automáticamente Desayuno/Almuerzo/
+ * Merienda/Cena usando exclusivamente los alimentos favoritos de acá. NO
+ * reemplaza `MealCatalogItem`/`MealLogEntry` (el diario de comidas
+ * existente, del que depende `getDashboardSummary` — no se toca) — es un
+ * concepto nuevo y separado, guardado bajo su propia key.
+ */
+export type NutritionGoal = "Volumen" | "Recomposición corporal" | "Definición" | "Mantenimiento";
+
+export type ActivityLevel = "Baja" | "Moderada" | "Alta" | "Deportista";
+
+/** Sprint 5.0 — las 5 categorías fijas del selector de alimentos favoritos. */
+export type FavoriteFoodCategory = "proteinas" | "carbohidratos" | "grasas" | "frutas" | "verduras";
+
+export interface NutritionProfile {
+  heightCm: number;
+  weightKg: number;
+  goal: NutritionGoal;
+  activity: ActivityLevel;
+  mealsPerDay: number;
+  /** Objetivos diarios editables a mano — Sprint 5.0 NO los calcula automáticamente (eso llega en Sprint 5.2). */
+  targetProtein: number;
+  targetCarbs: number;
+  targetFat: number;
+  targetWaterLiters: number;
+  favoriteProteins: string[];
+  favoriteCarbs: string[];
+  favoriteFats: string[];
+  favoriteFruits: string[];
+  favoriteVegetables: string[];
+}
+
+/**
+ * Sprint 5.0 — datos del formulario inicial "Configurar plan nutricional".
+ * Los objetivos diarios y los favoritos arrancan vacíos/en 0 y se editan
+ * después, ya con el perfil creado.
+ */
+export interface CreateNutritionProfileInput {
+  heightCm: number;
+  weightKg: number;
+  goal: NutritionGoal;
+  activity: ActivityLevel;
+  mealsPerDay: number;
+}
+
+/** Sprint 5.0 — edición parcial de cualquier campo del perfil ya creado (objetivos diarios, favoritos, o los datos base). */
+export type UpdateNutritionProfileInput = Partial<NutritionProfile>;
+
+/* ------------------------------------------------------------------ */
 /* Dashboard                                                            */
 /* ------------------------------------------------------------------ */
 

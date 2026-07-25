@@ -1,7 +1,8 @@
-import { EXERCISE_CATALOG, MEAL_CATALOG, ROUTINE, ROUTINE_SPLITS, ROUTINE_TEMPLATES, ROUTINES } from "./data";
+import { EXERCISE_CATALOG, FAVORITE_FOOD_OPTIONS, MEAL_CATALOG, ROUTINE, ROUTINE_SPLITS, ROUTINE_TEMPLATES, ROUTINES } from "./data";
 import {
   AceroState,
   AddExerciseInput,
+  CreateNutritionProfileInput,
   CreateRoutineInput,
   DashboardSummary,
   DayPointer,
@@ -11,8 +12,10 @@ import {
   ExerciseHistoryEntry,
   ExercisePrescription,
   ExerciseProgressDelta,
+  FavoriteFoodCategory,
   MealCatalogItem,
   MealLogEntry,
+  NutritionProfile,
   NutritionProgress,
   Routine,
   RoutineDayPlan,
@@ -22,6 +25,7 @@ import {
   RoutineWeek,
   SetEntry,
   UpdateExerciseInput,
+  UpdateNutritionProfileInput,
   UpdateRoutineInfoInput,
   WeekProgress,
   WorkoutProgress,
@@ -44,6 +48,7 @@ const HISTORY_KEY = "forja.history";
 const CUSTOM_ROUTINES_KEY = "forja.routines.custom";
 const EXECUTIONS_KEY_PREFIX = "forja.executions.";
 const FAVORITE_EXERCISES_KEY = "forja.exercises.favorites";
+const NUTRITION_PROFILE_KEY = "forja.nutrition.profile";
 
 function todayKey(date?: string): string {
   return date ?? new Date().toISOString().slice(0, 10);
@@ -1260,6 +1265,72 @@ export function getNutritionProgress(date?: string): NutritionProgress {
     kcalConsumed,
     percent: MEAL_CATALOG.length === 0 ? 0 : Math.round((completed.length / MEAL_CATALOG.length) * 100),
   };
+}
+
+/**
+ * Sprint 5.0 — "Motor del plan nutricional". Perfil ÚNICO por usuario,
+ * completamente separado del diario de comidas de arriba
+ * (`MEAL_CATALOG`/`getMealLog`/`toggleMeal`/`getNutritionProgress`, del
+ * que depende `getDashboardSummary` — nada de eso se toca). Guarda datos
+ * base (altura, peso, objetivo, actividad, comidas por día), objetivos
+ * diarios editables a mano (proteína/carbohidratos/grasas/agua — sin
+ * cálculo automático todavía, eso es Sprint 5.2) y alimentos favoritos
+ * por categoría. Es la base sobre la que Sprint 5.1 va a generar
+ * automáticamente Desayuno/Almuerzo/Merienda/Cena.
+ */
+export function getFavoriteFoodOptions(): Record<FavoriteFoodCategory, string[]> {
+  return FAVORITE_FOOD_OPTIONS;
+}
+
+/** Sprint 5.0 — `null` si el usuario todavía no configuró su plan nutricional. */
+export function getNutritionProfile(): NutritionProfile | null {
+  return readJSON<NutritionProfile | null>(NUTRITION_PROFILE_KEY, null);
+}
+
+/**
+ * Sprint 5.0 — crea el perfil único (pantalla "Configurar plan
+ * nutricional"). Los objetivos diarios arrancan en 0 y los favoritos
+ * vacíos: se editan después, no se calculan acá. Si ya existía un
+ * perfil, lo reemplaza por completo (solo hay uno).
+ */
+export function saveNutritionProfile(input: CreateNutritionProfileInput): NutritionProfile {
+  const profile: NutritionProfile = {
+    heightCm: input.heightCm,
+    weightKg: input.weightKg,
+    goal: input.goal,
+    activity: input.activity,
+    mealsPerDay: input.mealsPerDay,
+    targetProtein: 0,
+    targetCarbs: 0,
+    targetFat: 0,
+    targetWaterLiters: 0,
+    favoriteProteins: [],
+    favoriteCarbs: [],
+    favoriteFats: [],
+    favoriteFruits: [],
+    favoriteVegetables: [],
+  };
+  writeJSON(NUTRITION_PROFILE_KEY, profile);
+  return profile;
+}
+
+/**
+ * Sprint 5.0 — edición parcial del perfil ya creado (objetivos diarios,
+ * favoritos, o los datos base). `null` si todavía no existe perfil (no
+ * crea uno nuevo — para eso está `saveNutritionProfile`).
+ */
+export function updateNutritionProfile(patch: UpdateNutritionProfileInput): NutritionProfile | null {
+  const current = getNutritionProfile();
+  if (!current) return null;
+  const updated: NutritionProfile = { ...current, ...patch };
+  writeJSON(NUTRITION_PROFILE_KEY, updated);
+  return updated;
+}
+
+/** Sprint 5.0 — borra el perfil nutricional por completo (vuelve a mostrar "Configurar plan nutricional"). */
+export function clearNutritionProfile(): void {
+  if (!isBrowser()) return;
+  window.localStorage.removeItem(NUTRITION_PROFILE_KEY);
 }
 
 /* ------------------------------------------------------------------ */

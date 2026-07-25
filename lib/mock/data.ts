@@ -1,6 +1,7 @@
 import {
   ExerciseCatalogItem,
   ExercisePrescription,
+  FavoriteFoodCategory,
   MealCatalogItem,
   Routine,
   RoutineDayPlan,
@@ -589,3 +590,17 @@ export const MEAL_CATALOG: MealCatalogItem[] = [
     fat: 20,
   },
 ];
+
+/**
+ * Sprint 5.0 — catálogo fijo de alimentos favoritos para el selector de
+ * chips del perfil nutricional. Separado de `MEAL_CATALOG` a propósito:
+ * esto no son comidas armadas, son ingredientes sueltos que Sprint 5.1 va
+ * a combinar para generar Desayuno/Almuerzo/Merienda/Cena.
+ */
+export const FAVORITE_FOOD_OPTIONS: Record<FavoriteFoodCategory, string[]> = {
+  proteinas: ["Pollo", "Carne", "Atún", "Huevos", "Yogur Griego", "Cerdo", "Pescado"],
+  carbohidratos: ["Arroz", "Papa", "Batata", "Avena", "Pan", "Fideos", "Quinoa"],
+  grasas: ["Palta", "Aceite de oliva", "Nueces", "Almendras", "Manteca de maní"],
+  frutas: ["Banana", "Kiwi", "Frutillas", "Mandarina", "Manzana", "Arándanos"],
+  verduras: ["Brócoli", "Espinaca", "Tomate", "Zanahoria", "Lechuga", "Pepino"],
+};
