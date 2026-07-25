@@ -7,6 +7,7 @@ import { Card } from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
 import { clsx } from "@/shared/utils/clsx";
 import {
+  archiveWeekExecution,
   compareExerciseToHistory,
   finishDay,
   getDayPlan,
@@ -14,6 +15,7 @@ import {
   getExercise,
   getExerciseHistory,
   getWeek,
+  getWeekCompletion,
   updateExerciseSet,
 } from "@/lib/mock/repository";
 import { DaySession, ExerciseHistoryEntry } from "@/lib/mock/types";
@@ -38,6 +40,12 @@ import { DaySession, ExerciseHistoryEntry } from "@/lib/mock/types";
  * el repositorio) y un indicador ▲/▼/= comparado contra lo que se está
  * tipeando ahora mismo (compareExerciseToHistory(), nueva pero reutiliza
  * exactamente los mismos datos — sin storage nuevo, sin Supabase).
+ *
+ * Sprint 4.3 — si finalizar ESTE día es lo que completa las 5 de la
+ * semana, se archiva la semana como una ejecución más
+ * (archiveWeekExecution) y se va a la pantalla "Semana completada" en vez
+ * de a Hoy. Cualquier otro día sigue yendo a Hoy exactamente igual que
+ * antes — no cambia nada del registro en sí.
  */
 export default function DiaPage({ params }: { params: Promise<{ weekId: string; dayId: string }> }) {
   const { weekId, dayId } = use(params);
@@ -85,10 +93,23 @@ export default function DiaPage({ params }: { params: Promise<{ weekId: string; 
     setSession(getDaySession(weekId, dayId));
   }
 
-  /** Guarda la sesión como finalizada y vuelve a Hoy, que ya lee el progreso actualizado. */
+  /**
+   * Guarda la sesión como finalizada. Si con este día se completan las 5
+   * de la semana, archiva la ejecución y muestra la pantalla de cierre;
+   * si no, vuelve a Hoy exactamente como siempre.
+   */
   function handleFinish() {
+    const before = getWeekCompletion(weekId);
     finishDay(weekId, dayId);
-    router.push("/hoy");
+    const after = getWeekCompletion(weekId);
+    const justCompletedWeek = before.completedDays < before.totalDays && after.completedDays === after.totalDays && after.totalDays > 0;
+
+    if (justCompletedWeek) {
+      archiveWeekExecution(weekId);
+      router.push(`/entreno/${weekId}/completada`);
+    } else {
+      router.push("/hoy");
+    }
   }
 
   return (

@@ -13,12 +13,27 @@ export interface ExerciseCatalogItem {
   id: string;
   name: string;
   muscleGroup: string;
-  /** Configurable por ejercicio — nunca hardcodeado en un componente. */
-  videoUrl: string;
+  /** Configurable por ejercicio — nunca hardcodeado en un componente. Sprint 4.5: pasa a ser opcional. */
+  videoUrl?: string;
   /** Metadata de catálogo (Sprint 3.4) — el ejercicio existe una sola vez acá; las rutinas solo lo referencian. */
   description: string;
   equipment: string;
   exerciseType: string;
+  /**
+   * Sprint 4.5 — Biblioteca profesional de ejercicios. Todos los campos de
+   * abajo son enriquecimiento del mismo EXERCISE_CATALOG existente (no se
+   * crea un catálogo nuevo).
+   */
+  /** Categoría fija (reutiliza `ExerciseCategory`, ya usada en el buscador de ejercicios). */
+  category: ExerciseCategory;
+  /** Músculo principal trabajado (más específico que `muscleGroup`, ej: "Pectoral"). */
+  primaryMuscle: string;
+  /** Músculos secundarios involucrados (ej: ["Tríceps", "Deltoide anterior"]). */
+  secondaryMuscles: string[];
+  /** Nivel de dificultad. */
+  level: ExerciseLevel;
+  /** true si el ejercicio se realiza un lado del cuerpo por vez. */
+  unilateral: boolean;
 }
 
 export interface ExercisePrescription {
@@ -26,6 +41,10 @@ export interface ExercisePrescription {
   order: number;
   targetSets: number;
   targetReps: string;
+  /** Sprint 4.1 — descanso en segundos entre series. Opcional: las rutinas base (El Toro) no lo usan. */
+  restSeconds?: number;
+  /** Sprint 4.2 — notas libres del editor de rutinas propias. Opcional. */
+  notes?: string;
 }
 
 export interface RoutineDayPlan {
@@ -34,6 +53,8 @@ export interface RoutineDayPlan {
   routineId: string;
   order: number;
   name: string;
+  /** Sprint 4.4 — nombre propio opcional (ej: "Empuje", "Pull"), solo para rutinas propias. Si no está, se sigue mostrando `name`. No reemplaza ni afecta el `id`. */
+  displayName?: string;
   exercises: ExercisePrescription[];
 }
 
@@ -42,6 +63,8 @@ export interface RoutineWeek {
   routineId: string;
   number: number;
   label: string;
+  /** Sprint 4.4 — nombre propio opcional (ej: "Adaptación", "Descarga"), solo para rutinas propias. Si no está, se sigue mostrando `label` ("Semana N"). No reemplaza ni afecta el `id`. */
+  displayName?: string;
   days: RoutineDayPlan[];
 }
 
@@ -63,6 +86,70 @@ export interface Routine {
  * demás rutinas todavía sin contenido en el catálogo.
  */
 export interface CreateRoutineInput {
+  name: string;
+  goal: string;
+  sport: string;
+  weeksCount: number;
+  daysPerWeek: number;
+  /**
+   * Sprint 4.6 — nombres de semana/día sugeridos por una plantilla FORJA
+   * (opcional). Si no vienen (o no coinciden en longitud con
+   * `weeksCount`/`daysPerWeek`), la rutina se crea exactamente igual que
+   * siempre: `weeks: []`, sin ningún nombre precargado.
+   */
+  weekNames?: string[];
+  dayNames?: string[];
+}
+
+/**
+ * Sprint 4.6 — Plantilla fija de rutina ("Plantillas FORJA"). Nunca
+ * incluye ejercicios: solo acelera la creación con un nombre sugerido,
+ * cantidad de semanas/días y sus nombres. El usuario puede cambiar
+ * absolutamente todo después de crearla.
+ */
+export interface RoutineTemplate {
+  id: string;
+  name: string;
+  description: string;
+  weeksCount: number;
+  /** Longitud === weeksCount. */
+  weekNames: string[];
+  /** Longitud === cantidad de días por semana; se repite igual en cada semana. */
+  dayNames: string[];
+}
+
+/**
+ * Sprint 4.1 — datos del formulario "Agregar ejercicio" dentro del
+ * constructor de una rutina propia (/entreno/mi-rutina/...).
+ */
+export interface AddExerciseInput {
+  exerciseId: string;
+  targetSets: number;
+  targetReps: string;
+  restSeconds: number;
+}
+
+/** Sprint 4.1 — las 6 categorías fijas del buscador de ejercicios. */
+export type ExerciseCategory = "Pecho" | "Espalda" | "Piernas" | "Hombros" | "Brazos" | "Core";
+
+/** Sprint 4.5 — nivel de dificultad del ejercicio (biblioteca profesional). */
+export type ExerciseLevel = "Principiante" | "Intermedio" | "Avanzado";
+
+/** Sprint 4.2 — datos editables de un ejercicio ya agregado a una rutina propia (el nombre no se edita acá, es solo lectura). */
+export interface UpdateExerciseInput {
+  targetSets: number;
+  targetReps: string;
+  restSeconds: number;
+  notes?: string;
+}
+
+/**
+ * Sprint 4.8 — datos editables de la información general de una rutina
+ * propia ("✏️ Editar rutina" en el constructor). Mismos 5 campos que
+ * `CreateRoutineInput` sin los opcionales de plantilla (`weekNames`/
+ * `dayNames`), que solo aplican al crear.
+ */
+export interface UpdateRoutineInfoInput {
   name: string;
   goal: string;
   sport: string;
@@ -102,6 +189,24 @@ export interface WorkoutProgress {
   completedSets: number;
   finished: boolean;
   percent: number;
+}
+
+/**
+ * Sprint 4.3 — "Ejecución de rutina": una rutina no es una única pasada,
+ * se puede correr infinitas veces. Cada vez que se completan los 5 días
+ * de una semana, esa semana queda archivada acá como una ejecución más
+ * (#1, #2, #3...) — reutiliza el mismo `DaySession` de siempre (sin
+ * inventar un formato nuevo), solo lo snapshotea para que "Reiniciar
+ * semana" pueda limpiar el progreso en vivo sin perder este historial.
+ */
+export interface RoutineExecution {
+  id: string;
+  routineId: string;
+  weekId: string;
+  /** 1, 2, 3... — cuántas veces se completó esta semana hasta ahora. */
+  executionNumber: number;
+  completedAt: string;
+  sessions: DaySession[];
 }
 
 export interface ExerciseHistoryEntry {
