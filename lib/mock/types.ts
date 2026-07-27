@@ -311,16 +311,43 @@ export interface NutritionProfile {
   goal: NutritionGoal;
   activity: ActivityLevel;
   mealsPerDay: number;
-  /** Objetivos diarios editables a mano — Sprint 5.0 NO los calcula automáticamente (eso llega en Sprint 5.2). */
+  /**
+   * Objetivos diarios editables a mano — Sprint 5.0 NO los calcula
+   * automáticamente (eso llega en Sprint 5.2, cuando se adapten según
+   * cambio de peso/objetivo/actividad/frecuencia de entrenamiento).
+   */
   targetProtein: number;
   targetCarbs: number;
   targetFat: number;
   targetWaterLiters: number;
+  /**
+   * Sprint 5.0 (continuación — "Objetivos nutricionales diarios"): mismo
+   * patrón que los targets de arriba, editables a mano, arrancan en 0.
+   */
+  targetWeightKg: number;
+  targetCalories: number;
+  targetFiber: number;
+  targetFruitPortions: number;
+  targetVegetablesGrams: number;
   favoriteProteins: string[];
   favoriteCarbs: string[];
   favoriteFats: string[];
   favoriteFruits: string[];
   favoriteVegetables: string[];
+  /**
+   * Sprint 5.0 (continuación) — metadata de auditoría, ISO 8601. `createdAt`
+   * se fija una sola vez en `saveNutritionProfile`; `updatedAt` se
+   * refresca en cada `updateNutritionProfile` (incluida cualquier edición
+   * de objetivos o favoritos). No hay `userId`: la app entera es de un
+   * solo usuario local sobre `localStorage` — no existe ningún concepto
+   * de sesión/autenticación en ningún otro módulo de FORJA todavía (el
+   * login vive deshabilitado en "modo demo", ver `lib/supabase/env.ts`).
+   * Agregar un `userId` acá sería un campo muerto que nadie escribe ni
+   * lee. El día que se conecte Supabase de verdad, ahí sí se agrega junto
+   * con la columna real de la tabla `nutrition_profiles`.
+   */
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -338,6 +365,328 @@ export interface CreateNutritionProfileInput {
 
 /** Sprint 5.0 — edición parcial de cualquier campo del perfil ya creado (objetivos diarios, favoritos, o los datos base). */
 export type UpdateNutritionProfileInput = Partial<NutritionProfile>;
+
+/* ------------------------------------------------------------------ */
+/* Nutrición — Sistema de Comidas Inteligentes (Sprint 5.1)             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sprint 5.1 — Catálogo Maestro de Alimentos: única fuente de verdad de
+ * macros por alimento. Las Meal Templates de abajo NUNCA guardan macros a
+ * mano — solo referencian un `foodId` de acá + una cantidad, y los
+ * totales se calculan siempre en `computeMealTemplateMacros()`.
+ *
+ * Ojo: NO tiene un campo `kcal`. Las calorías se derivan siempre con la
+ * fórmula estándar 4/4/9 (proteína×4 + carbohidratos×4 + grasas×9) en
+ * `repository.ts` — guardar kcal como campo aparte sería un dato
+ * duplicado que se puede desincronizar de los macros (Principio 2 de
+ * AGENTS.md: "cada dato debe tener un propósito", no "por si acaso").
+ */
+export type FoodUnit = "g" | "ml" | "unidad";
+
+export interface FoodCatalogItem {
+  id: string;
+  name: string;
+  unit: FoodUnit;
+  /**
+   * Macros por 100 (si `unit` es "g" o "ml") o por 1 (si `unit` es
+   * "unidad") — la cantidad de referencia se deriva siempre de `unit` en
+   * vez de guardarse como campo aparte (mismo motivo que el kcal: evitar
+   * un dato redundante que se pueda desincronizar).
+   */
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+}
+
+/** Sprint 5.1 — un ítem de una Meal Template: solo referencia + cantidad, nunca macros. */
+export interface MealTemplateItem {
+  foodId: string;
+  /** Gramos/ml si el alimento es por peso, o cantidad de unidades si es "unidad". */
+  quantity: number;
+}
+
+/**
+ * Sprint 5.1 — Meal Template: unidad principal del sistema de comidas (no
+ * el alimento suelto). Reutiliza `MealSlot` (ya definido arriba para el
+ * diario de comidas viejo) para `mealType` en vez de inventar un enum
+ * nuevo con el mismo significado. Sin editor todavía — las 8 plantillas
+ * iniciales (2 opciones × 4 tipos de comida) quedan precargadas en
+ * `MEAL_TEMPLATES` (data.ts); `active`/`order` ya preparan el terreno
+ * para un editor futuro sin tener que migrar el modelo.
+ */
+export interface MealTemplate {
+  id: string;
+  mealType: MealSlot;
+  /** "Opción A" / "Opción B" — string libre a propósito, para no atar el modelo a exactamente 2 opciones en el futuro. */
+  optionLabel: string;
+  name: string;
+  items: MealTemplateItem[];
+  order: number;
+  active: boolean;
+}
+
+/** Sprint 5.1 — resultado de calcular los macros de una Meal Template (o de un registro diario). Siempre calculado, nunca tipeado a mano. */
+export interface MealMacros {
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  kcal: number;
+}
+
+/**
+ * Sprint 5.1 — "Registro diario": lo que queda guardado al tocar
+ * "Marcar {tipo} realizado". Los macros son una FOTO calculada en el
+ * momento (vía `computeMealTemplateMacros`) y se persisten en el
+ * registro — no se recalculan cada vez leyendo la plantilla en vivo — a
+ * propósito: si mañana se edita una Meal Template o un alimento del
+ * catálogo, los días ya registrados no deben cambiar retroactivamente
+ * (mismo criterio que ya usa `MealCatalogItem`, que guarda kcal/macros
+ * fijos por comida). Sigue sin haber `userId`: un solo usuario local,
+ * igual que el resto de FORJA (ver nota en `NutritionProfile`).
+ */
+export interface MealCompletionLog {
+  id: string;
+  mealTemplateId: string;
+  mealType: MealSlot;
+  /** Fecha calendario (YYYY-MM-DD), para agrupar por día como el resto de la app. */
+  date: string;
+  /** Momento exacto (ISO 8601) — de acá sale la hora mostrada en la UI. */
+  completedAt: string;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  kcal: number;
+}
+
+/**
+ * Sprint 5.1 — progreso nutricional del día, sumando todos los
+ * `MealCompletionLog` de hoy contra los objetivos del `NutritionProfile`.
+ * Distinto de `NutritionProgress` (Sprint 3.x, basado en `MEAL_CATALOG` y
+ * kcal solamente) — ese sigue alimentando `getDashboardSummary()` sin
+ * tocarse; este es el progreso de macros del nuevo sistema de comidas.
+ */
+export interface NutritionDailyProgress {
+  consumed: MealMacros;
+  target: {
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+    kcal: number;
+  };
+  /** 0-100, redondeado, por macro — clampeado a 100 aunque se pase del objetivo. */
+  percent: {
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+    kcal: number;
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Nutrición — Motor de Análisis (Sprint 5.2)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sprint 5.2 — Todo lo de acá se DERIVA de `MealCompletionLog` en el
+ * momento de pedirlo (repository.ts) — no hay ninguna tabla/key nueva en
+ * localStorage. `MealTemplate` sigue siendo solo plantilla y
+ * `FOOD_CATALOG` sigue siendo la única fuente de verdad de un alimento;
+ * este motor no le agrega ni le saca responsabilidades a ninguno de los
+ * dos, solo lee lo que el usuario ya registró.
+ */
+export type NutritionStatsPeriod = "semana" | "mes";
+
+/**
+ * Rollup de UN día — la unidad mínima de la que salen todas las demás
+ * métricas (adherencia, promedios, rachas, series de gráfico). Reutiliza
+ * `MealMacros` para no duplicar la forma de "un grupo de macros".
+ */
+export interface NutritionDailyStat extends MealMacros {
+  date: string;
+  mealsCompleted: number;
+  /** Cantidad de tipos de comida distintos que existen hoy en el sistema (hoy: 4 — desayuno/almuerzo/merienda/cena). Se deriva de `MEAL_TEMPLATES`, nunca un número fijo repetido en varios lados. */
+  mealsExpected: number;
+  adherencePercent: number;
+}
+
+/** Promedio de adherencia de un día de la semana (Lunes, Martes, ...) a lo largo de todo el historial disponible. */
+export interface NutritionWeekdayStat {
+  /** 0 = domingo .. 6 = sábado, igual que `Date.getDay()`. */
+  weekday: number;
+  weekdayLabel: string;
+  averageAdherencePercent: number;
+  /** Cuántos días de ese día-de-semana hay en el historial — para no confundir "1 solo domingo registrado" con una tendencia real. */
+  daysCounted: number;
+}
+
+/** Sprint 5.2 — un punto de una serie lista para graficar. `x` es genérico (fecha calendario, o nombre de día de semana para `adherenceByWeekday`). */
+export interface NutritionChartSeriesPoint {
+  x: string;
+  value: number;
+}
+
+export interface NutritionChartSeries {
+  id: string;
+  label: string;
+  unit: string;
+  points: NutritionChartSeriesPoint[];
+}
+
+/** Sprint 5.2 — racha de días con adherencia 100% (los 4 tipos de comida completados ese día). Mismo criterio que ya usa `getStreak()` para el Acero, aplicado a nutrición. */
+export interface NutritionStreaks {
+  current: number;
+  best: number;
+}
+
+/**
+ * Sprint 5.2 — reporte de estadísticas para un período (semana o mes que
+ * contiene `periodStart`). Es el objeto que alimenta la pantalla de
+ * Estadísticas y, más adelante, el informe descargable — mismo patrón
+ * que `DashboardSummary` (un solo objeto agregado, calculado a partir de
+ * piezas ya existentes, sin volver a calcular nada dos veces).
+ */
+export interface NutritionAnalyticsReport {
+  period: NutritionStatsPeriod;
+  periodStart: string;
+  periodEnd: string;
+  /** Días ya transcurridos del período (capados a hoy — un período en curso nunca cuenta días futuros como "comidas omitidas"). */
+  daysElapsed: number;
+
+  mealsCompleted: number;
+  mealsExpected: number;
+  mealsOmitted: number;
+  /** % de adherencia del período completo (comidas realizadas / esperadas). */
+  adherencePercent: number;
+
+  /** Promedio diario de cada macro en el período (los días sin ningún registro cuentan como 0, no se excluyen del promedio). */
+  averages: MealMacros;
+  /**
+   * Agua promedio: siempre `null` a propósito. FORJA todavía no tiene
+   * ninguna forma de registrar agua consumida (no existe esa función en
+   * ningún lado del repositorio) — mostrar un 0 o inventar un valor acá
+   * sería un dato falso. Cuando exista un registro de agua real, este
+   * campo pasa a ser `number`.
+   */
+  waterAverageMl: null;
+
+  /** Calculados sobre TODO el historial disponible (no solo este período) — son patrones estructurales, no algo que tenga sentido "por semana". */
+  bestWeekday: NutritionWeekdayStat | null;
+  worstWeekday: NutritionWeekdayStat | null;
+  weekdayStats: NutritionWeekdayStat[];
+  currentStreak: number;
+  bestStreak: number;
+
+  /** Un `NutritionDailyStat` por cada día del período — la materia prima de todo lo de arriba, y lo que arma las series de `charts`. */
+  dailyStats: NutritionDailyStat[];
+
+  /**
+   * Series listas para pasarle a una librería de gráficos en un sprint
+   * futuro. Todavía no se renderiza ningún gráfico (no corresponde
+   * todavía según el spec) — esto es solo el modelo de datos.
+   */
+  charts: {
+    weeklyAdherence: NutritionChartSeries;
+    proteinEvolution: NutritionChartSeries;
+    carbsEvolution: NutritionChartSeries;
+    fatEvolution: NutritionChartSeries;
+    mealsCompliance: NutritionChartSeries;
+    adherenceByWeekday: NutritionChartSeries;
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Nutrición — Tendencias e Insights (Sprint 5.2.1)                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sprint 5.2.1 — "¿Estoy mejorando?" en vez de "semana A vs. semana B"
+ * aisladas. `up`/`down` solo cuando el cambio supera el umbral de ruido
+ * (`STABLE_THRESHOLD_PERCENT` en repository.ts) — un cambio de 1-2% no
+ * es una tendencia, es variación normal día a día.
+ */
+export type TrendDirection = "up" | "down" | "stable";
+
+export interface NutritionTrendMetric {
+  metric: "protein" | "carbs" | "fat" | "fiber" | "kcal" | "adherencePercent";
+  label: string;
+  unit: string;
+  /** Promedio del período actual. */
+  current: number;
+  /**
+   * Promedio de los `baselinePeriods` períodos ANTERIORES (no un solo
+   * período aislado) — así una sola semana rara no dispara un "▲"/"▼"
+   * que no refleja una tendencia real.
+   */
+  baseline: number;
+  changePercent: number;
+  direction: TrendDirection;
+}
+
+/**
+ * Sprint 5.2.1 — reemplaza el viejo `weekOverWeek: {current, previous}`
+ * (comparación de un solo par de semanas) por un modelo de tendencia:
+ * el período actual contra el PROMEDIO de varios períodos anteriores.
+ * Se apoya enteramente en `getNutritionAnalytics` — no recalcula macros
+ * ni adherencia por su cuenta.
+ */
+export interface NutritionTrends {
+  period: NutritionStatsPeriod;
+  periodStart: string;
+  periodEnd: string;
+  /** Cuántos períodos anteriores se promediaron para el baseline (ej: 4 semanas). */
+  baselinePeriods: number;
+  metrics: NutritionTrendMetric[];
+}
+
+/** Sprint 5.2.1 — de qué "familia" es la recomendación; determina ícono/color cuando se muestre en la UI. */
+export type InsightType = "positive" | "warning" | "suggestion" | "milestone" | "info";
+
+export type InsightPriority = "alta" | "media" | "baja";
+
+/**
+ * Sprint 5.2.1 — estructura única para cualquier recomendación
+ * automática (reglas simples o IA, en un sprint futuro). Hoy nadie
+ * genera insights todavía (`getNutritionInsights` devuelve `[]`) — esto
+ * es el molde que va a usar esa lógica cuando exista, para que nunca
+ * haya dos formatos distintos de "recomendación" en FORJA.
+ */
+export interface NutritionInsight {
+  id: string;
+  type: InsightType;
+  priority: InsightPriority;
+  title: string;
+  description: string;
+  /** A qué métrica del Analytics Engine se refiere (ej: "protein", "adherencePercent") — para poder ubicarla sin duplicar el dato numérico acá. */
+  metric: string;
+  createdAt: string;
+}
+
+/**
+ * Sprint 5.2 (actualizado en 5.2.1) — toda la información que un informe
+ * descargable futuro va a necesitar. Todavía NO hay exportación (ni PDF
+ * ni ningún archivo) — esto es solo la data ya armada y lista,
+ * reutilizando `getNutritionAnalytics`/`getNutritionTrends` sin duplicar
+ * ningún cálculo.
+ */
+export interface NutritionReportData {
+  generatedAt: string;
+  profile: NutritionProfile | null;
+  today: NutritionDailyProgress;
+  week: NutritionAnalyticsReport;
+  month: NutritionAnalyticsReport;
+  /** "¿Estoy mejorando?" — semana actual vs. promedio de las últimas semanas, no un par aislado. */
+  trends: NutritionTrends;
+  /** Últimos ~60 días, día por día — para la sección de historial del informe. */
+  history: NutritionDailyStat[];
+  /** Recomendaciones automáticas — vacío hasta que un sprint futuro implemente la lógica que las genera (reglas o IA), usando siempre `NutritionInsight`. */
+  insights: NutritionInsight[];
+}
 
 /* ------------------------------------------------------------------ */
 /* Dashboard                                                            */

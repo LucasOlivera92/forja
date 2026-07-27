@@ -2,7 +2,9 @@ import {
   ExerciseCatalogItem,
   ExercisePrescription,
   FavoriteFoodCategory,
+  FoodCatalogItem,
   MealCatalogItem,
+  MealTemplate,
   Routine,
   RoutineDayPlan,
   RoutineSplitCategory,
@@ -604,3 +606,157 @@ export const FAVORITE_FOOD_OPTIONS: Record<FavoriteFoodCategory, string[]> = {
   frutas: ["Banana", "Kiwi", "Frutillas", "Mandarina", "Manzana", "Arándanos"],
   verduras: ["Brócoli", "Espinaca", "Tomate", "Zanahoria", "Lechuga", "Pepino"],
 };
+
+/**
+ * Sprint 5.1 — Catálogo Maestro de Alimentos. Única fuente de verdad de
+ * macros por alimento: las Meal Templates de abajo solo referencian un
+ * `id` de acá + una cantidad, nunca guardan proteína/carbohidratos/grasa
+ * a mano. Valores por 100g/100ml (o por 1 "unidad" para huevo/banana/
+ * kiwi/pan) — estándar de etiqueta nutricional, redondeados. Sin `kcal`:
+ * se deriva siempre con la fórmula 4/4/9 en `repository.ts`.
+ */
+export const FOOD_CATALOG: FoodCatalogItem[] = [
+  { id: "food-huevo", name: "Huevo", unit: "unidad", protein: 6, carbs: 0.6, fat: 5, fiber: 0 },
+  { id: "food-avena", name: "Avena arrollada", unit: "g", protein: 13, carbs: 60, fat: 7, fiber: 10 },
+  { id: "food-harina-avena", name: "Harina de avena", unit: "g", protein: 13, carbs: 62, fat: 7, fiber: 9 },
+  { id: "food-banana", name: "Banana", unit: "unidad", protein: 1.3, carbs: 27, fat: 0.4, fiber: 3.1 },
+  { id: "food-queso-duro", name: "Queso duro", unit: "g", protein: 35, carbs: 0, fat: 28, fiber: 0 },
+  { id: "food-leche-proteica", name: "Leche proteica", unit: "ml", protein: 8, carbs: 5, fat: 1, fiber: 0 },
+  { id: "food-arandanos", name: "Arándanos", unit: "g", protein: 0.7, carbs: 14, fat: 0.3, fiber: 2.4 },
+  { id: "food-kiwi", name: "Kiwi", unit: "unidad", protein: 0.8, carbs: 10, fat: 0.4, fiber: 2.3 },
+  { id: "food-pechuga-pollo", name: "Pechuga de pollo", unit: "g", protein: 31, carbs: 0, fat: 3.6, fiber: 0 },
+  { id: "food-arroz-blanco", name: "Arroz blanco cocido", unit: "g", protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4 },
+  { id: "food-brocoli", name: "Brócoli", unit: "g", protein: 2.8, carbs: 7, fat: 0.4, fiber: 2.6 },
+  { id: "food-aceite-oliva", name: "Aceite de oliva", unit: "g", protein: 0, carbs: 0, fat: 100, fiber: 0 },
+  { id: "food-carne-magra", name: "Carne magra (bife)", unit: "g", protein: 26, carbs: 0, fat: 10, fiber: 0 },
+  { id: "food-batata", name: "Batata", unit: "g", protein: 1.6, carbs: 20, fat: 0.1, fiber: 3 },
+  { id: "food-palta", name: "Palta", unit: "g", protein: 2, carbs: 9, fat: 15, fiber: 7 },
+  { id: "food-espinaca", name: "Espinaca", unit: "g", protein: 2.9, carbs: 3.6, fat: 0.4, fiber: 2.2 },
+  { id: "food-yogur-griego", name: "Yogur griego", unit: "g", protein: 9, carbs: 4, fat: 5, fiber: 0 },
+  { id: "food-frutos-secos", name: "Frutos secos (mix)", unit: "g", protein: 20, carbs: 15, fat: 50, fiber: 8 },
+  { id: "food-pan-integral", name: "Pan integral", unit: "unidad", protein: 3, carbs: 15, fat: 1, fiber: 2 },
+  { id: "food-manteca-mani", name: "Manteca de maní", unit: "g", protein: 25, carbs: 20, fat: 50, fiber: 6 },
+  { id: "food-salmon", name: "Salmón", unit: "g", protein: 20, carbs: 0, fat: 13, fiber: 0 },
+  { id: "food-atun", name: "Atún", unit: "g", protein: 26, carbs: 0, fat: 1, fiber: 0 },
+  { id: "food-quinoa", name: "Quinoa cocida", unit: "g", protein: 4.4, carbs: 21, fat: 1.9, fiber: 2.8 },
+];
+
+/**
+ * Sprint 5.1 — "Sistema de Comidas Inteligentes": la unidad principal ya
+ * no es el alimento suelto, es la comida armada. 2 opciones precargadas
+ * por cada tipo (Desayuno/Almuerzo/Merienda/Cena) — sin editor todavía,
+ * tal como pide el spec. Los macros de cada una se calculan siempre a
+ * partir de `FOOD_CATALOG` (`computeMealTemplateMacros` en repository.ts)
+ * — acá no hay ni un solo número de proteína/carbohidrato/grasa.
+ */
+export const MEAL_TEMPLATES: MealTemplate[] = [
+  {
+    id: "meal-desayuno-a",
+    mealType: "desayuno",
+    optionLabel: "Opción A",
+    name: "Huevos con avena y banana",
+    order: 1,
+    active: true,
+    items: [
+      { foodId: "food-huevo", quantity: 4 },
+      { foodId: "food-avena", quantity: 80 },
+      { foodId: "food-banana", quantity: 1 },
+      { foodId: "food-queso-duro", quantity: 20 },
+    ],
+  },
+  {
+    id: "meal-desayuno-b",
+    mealType: "desayuno",
+    optionLabel: "Opción B",
+    name: "Panqueques de avena",
+    order: 2,
+    active: true,
+    items: [
+      { foodId: "food-huevo", quantity: 3 },
+      { foodId: "food-harina-avena", quantity: 80 },
+      { foodId: "food-leche-proteica", quantity: 150 },
+      { foodId: "food-arandanos", quantity: 100 },
+      { foodId: "food-kiwi", quantity: 1 },
+    ],
+  },
+  {
+    id: "meal-almuerzo-a",
+    mealType: "almuerzo",
+    optionLabel: "Opción A",
+    name: "Pollo con arroz y brócoli",
+    order: 1,
+    active: true,
+    items: [
+      { foodId: "food-pechuga-pollo", quantity: 200 },
+      { foodId: "food-arroz-blanco", quantity: 150 },
+      { foodId: "food-brocoli", quantity: 100 },
+      { foodId: "food-aceite-oliva", quantity: 10 },
+    ],
+  },
+  {
+    id: "meal-almuerzo-b",
+    mealType: "almuerzo",
+    optionLabel: "Opción B",
+    name: "Bife con batata y palta",
+    order: 2,
+    active: true,
+    items: [
+      { foodId: "food-carne-magra", quantity: 180 },
+      { foodId: "food-batata", quantity: 200 },
+      { foodId: "food-palta", quantity: 50 },
+      { foodId: "food-espinaca", quantity: 50 },
+    ],
+  },
+  {
+    id: "meal-merienda-a",
+    mealType: "merienda",
+    optionLabel: "Opción A",
+    name: "Yogur con frutos secos y banana",
+    order: 1,
+    active: true,
+    items: [
+      { foodId: "food-yogur-griego", quantity: 200 },
+      { foodId: "food-frutos-secos", quantity: 20 },
+      { foodId: "food-banana", quantity: 1 },
+    ],
+  },
+  {
+    id: "meal-merienda-b",
+    mealType: "merienda",
+    optionLabel: "Opción B",
+    name: "Tostadas con manteca de maní",
+    order: 2,
+    active: true,
+    items: [
+      { foodId: "food-pan-integral", quantity: 2 },
+      { foodId: "food-manteca-mani", quantity: 20 },
+      { foodId: "food-banana", quantity: 1 },
+    ],
+  },
+  {
+    id: "meal-cena-a",
+    mealType: "cena",
+    optionLabel: "Opción A",
+    name: "Salmón con batata y brócoli",
+    order: 1,
+    active: true,
+    items: [
+      { foodId: "food-salmon", quantity: 180 },
+      { foodId: "food-batata", quantity: 200 },
+      { foodId: "food-brocoli", quantity: 100 },
+    ],
+  },
+  {
+    id: "meal-cena-b",
+    mealType: "cena",
+    optionLabel: "Opción B",
+    name: "Atún con quinoa y espinaca",
+    order: 2,
+    active: true,
+    items: [
+      { foodId: "food-atun", quantity: 150 },
+      { foodId: "food-quinoa", quantity: 150 },
+      { foodId: "food-espinaca", quantity: 100 },
+    ],
+  },
+];

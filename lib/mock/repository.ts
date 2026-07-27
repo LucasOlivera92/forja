@@ -1,4 +1,14 @@
-import { EXERCISE_CATALOG, FAVORITE_FOOD_OPTIONS, MEAL_CATALOG, ROUTINE, ROUTINE_SPLITS, ROUTINE_TEMPLATES, ROUTINES } from "./data";
+import {
+  EXERCISE_CATALOG,
+  FAVORITE_FOOD_OPTIONS,
+  FOOD_CATALOG,
+  MEAL_CATALOG,
+  MEAL_TEMPLATES,
+  ROUTINE,
+  ROUTINE_SPLITS,
+  ROUTINE_TEMPLATES,
+  ROUTINES,
+} from "./data";
 import {
   AceroState,
   AddExerciseInput,
@@ -13,10 +23,27 @@ import {
   ExercisePrescription,
   ExerciseProgressDelta,
   FavoriteFoodCategory,
+  FoodCatalogItem,
   MealCatalogItem,
+  MealCompletionLog,
   MealLogEntry,
+  MealMacros,
+  MealSlot,
+  MealTemplate,
+  NutritionAnalyticsReport,
+  NutritionChartSeries,
+  NutritionDailyProgress,
+  NutritionDailyStat,
+  NutritionInsight,
   NutritionProfile,
   NutritionProgress,
+  NutritionReportData,
+  NutritionStatsPeriod,
+  NutritionStreaks,
+  NutritionTrendMetric,
+  NutritionTrends,
+  NutritionWeekdayStat,
+  TrendDirection,
   Routine,
   RoutineDayPlan,
   RoutineExecution,
@@ -49,6 +76,7 @@ const CUSTOM_ROUTINES_KEY = "forja.routines.custom";
 const EXECUTIONS_KEY_PREFIX = "forja.executions.";
 const FAVORITE_EXERCISES_KEY = "forja.exercises.favorites";
 const NUTRITION_PROFILE_KEY = "forja.nutrition.profile";
+const NUTRITION_LOG_KEY_PREFIX = "forja.nutrition.log.";
 
 function todayKey(date?: string): string {
   return date ?? new Date().toISOString().slice(0, 10);
@@ -1294,6 +1322,7 @@ export function getNutritionProfile(): NutritionProfile | null {
  * perfil, lo reemplaza por completo (solo hay uno).
  */
 export function saveNutritionProfile(input: CreateNutritionProfileInput): NutritionProfile {
+  const now = new Date().toISOString();
   const profile: NutritionProfile = {
     heightCm: input.heightCm,
     weightKg: input.weightKg,
@@ -1304,11 +1333,18 @@ export function saveNutritionProfile(input: CreateNutritionProfileInput): Nutrit
     targetCarbs: 0,
     targetFat: 0,
     targetWaterLiters: 0,
+    targetWeightKg: 0,
+    targetCalories: 0,
+    targetFiber: 0,
+    targetFruitPortions: 0,
+    targetVegetablesGrams: 0,
     favoriteProteins: [],
     favoriteCarbs: [],
     favoriteFats: [],
     favoriteFruits: [],
     favoriteVegetables: [],
+    createdAt: now,
+    updatedAt: now,
   };
   writeJSON(NUTRITION_PROFILE_KEY, profile);
   return profile;
@@ -1317,12 +1353,14 @@ export function saveNutritionProfile(input: CreateNutritionProfileInput): Nutrit
 /**
  * Sprint 5.0 — edición parcial del perfil ya creado (objetivos diarios,
  * favoritos, o los datos base). `null` si todavía no existe perfil (no
- * crea uno nuevo — para eso está `saveNutritionProfile`).
+ * crea uno nuevo — para eso está `saveNutritionProfile`). `updatedAt` se
+ * refresca siempre, sin importar qué campo cambió — es la única forma en
+ * que se edita el perfil, así que es el único lugar que necesita tocarlo.
  */
 export function updateNutritionProfile(patch: UpdateNutritionProfileInput): NutritionProfile | null {
   const current = getNutritionProfile();
   if (!current) return null;
-  const updated: NutritionProfile = { ...current, ...patch };
+  const updated: NutritionProfile = { ...current, ...patch, updatedAt: new Date().toISOString() };
   writeJSON(NUTRITION_PROFILE_KEY, updated);
   return updated;
 }
@@ -1331,6 +1369,591 @@ export function updateNutritionProfile(patch: UpdateNutritionProfileInput): Nutr
 export function clearNutritionProfile(): void {
   if (!isBrowser()) return;
   window.localStorage.removeItem(NUTRITION_PROFILE_KEY);
+}
+
+/**
+ * Sprint 5.1 — "Sistema de Comidas Inteligentes". La unidad principal es
+ * la Meal Template (una comida armada), no el alimento suelto. Todo acá
+ * respeta la Filosofía de FORJA (AGENTS.md): un solo click marca la
+ * comida, sin confirmaciones ni formularios, y los macros SIEMPRE se
+ * calculan desde `FOOD_CATALOG` — nunca se guardan a mano.
+ */
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function getFoodById(foodId: string): FoodCatalogItem | undefined {
+  return FOOD_CATALOG.find((food) => food.id === foodId);
+}
+
+export function getFoodCatalog(): FoodCatalogItem[] {
+  return FOOD_CATALOG;
+}
+
+/** Sprint 5.1 — las 2 opciones de un tipo de comida (o las 8 si no se filtra), ordenadas y solo las activas. */
+export function getMealTemplates(mealType?: MealSlot): MealTemplate[] {
+  return MEAL_TEMPLATES.filter((template) => template.active && (!mealType || template.mealType === mealType)).sort(
+    (a, b) => a.order - b.order
+  );
+}
+
+export function getMealTemplate(templateId: string): MealTemplate | undefined {
+  return MEAL_TEMPLATES.find((template) => template.id === templateId);
+}
+
+/**
+ * Sprint 5.1 — calcula los macros de una Meal Template a partir del
+ * Catálogo Maestro. Única función que hace esta cuenta — tanto la
+ * pantalla (para mostrar el total antes de marcarla) como
+ * `completeMealTemplate` (para guardar la foto del registro) pasan por
+ * acá, nunca se duplica la fórmula. Las calorías se derivan siempre con
+ * 4/4/9 (proteína×4 + carbohidratos×4 + grasas×9) — no existe un campo
+ * de kcal guardado en ningún lado del catálogo.
+ */
+export function computeMealTemplateMacros(template: MealTemplate): MealMacros {
+  const totals = template.items.reduce(
+    (acc, item) => {
+      const food = getFoodById(item.foodId);
+      if (!food) return acc;
+      const reference = food.unit === "unidad" ? 1 : 100;
+      const factor = item.quantity / reference;
+      return {
+        protein: acc.protein + food.protein * factor,
+        carbs: acc.carbs + food.carbs * factor,
+        fat: acc.fat + food.fat * factor,
+        fiber: acc.fiber + food.fiber * factor,
+      };
+    },
+    { protein: 0, carbs: 0, fat: 0, fiber: 0 }
+  );
+
+  return {
+    protein: round1(totals.protein),
+    carbs: round1(totals.carbs),
+    fat: round1(totals.fat),
+    fiber: round1(totals.fiber),
+    kcal: Math.round(totals.protein * 4 + totals.carbs * 4 + totals.fat * 9),
+  };
+}
+
+/** Sprint 5.1 — registro de comidas completadas de un día (default: hoy). */
+export function getMealCompletionLog(date?: string): MealCompletionLog[] {
+  const key = todayKey(date);
+  return readJSON<MealCompletionLog[]>(NUTRITION_LOG_KEY_PREFIX + key, []);
+}
+
+/** Sprint 5.1 — `true` si ya se marcó alguna opción de ese tipo de comida hoy (evita duplicar el mismo tipo en el mismo día). */
+export function isMealTypeCompletedToday(mealType: MealSlot, date?: string): boolean {
+  return getMealCompletionLog(date).some((entry) => entry.mealType === mealType);
+}
+
+/**
+ * Sprint 5.1 — "Marcar {tipo} realizado". Un solo click: calcula los
+ * macros de la plantilla elegida (siempre desde el catálogo, nunca a
+ * mano), guarda el registro con fecha + hora exacta, y listo — sin
+ * confirmaciones, sin modales, sin pantallas intermedias (Principio 1 y
+ * 5 de AGENTS.md). Devuelve `null` si el `templateId` no existe.
+ */
+export function completeMealTemplate(templateId: string, date?: string): MealCompletionLog | null {
+  const template = getMealTemplate(templateId);
+  if (!template) return null;
+
+  const key = todayKey(date);
+  const macros = computeMealTemplateMacros(template);
+  const entry: MealCompletionLog = {
+    id: `meal-log-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
+    mealTemplateId: template.id,
+    mealType: template.mealType,
+    date: key,
+    completedAt: new Date().toISOString(),
+    ...macros,
+  };
+
+  const log = getMealCompletionLog(key);
+  writeJSON(NUTRITION_LOG_KEY_PREFIX + key, [...log, entry]);
+  return entry;
+}
+
+/** Sprint 5.1 — suma los macros de todas las comidas ya marcadas hoy. Base de "el usuario debe sentir progreso inmediato". */
+export function getNutritionDailyTotals(date?: string): MealMacros {
+  const log = getMealCompletionLog(date);
+  return log.reduce(
+    (acc, entry) => ({
+      protein: round1(acc.protein + entry.protein),
+      carbs: round1(acc.carbs + entry.carbs),
+      fat: round1(acc.fat + entry.fat),
+      fiber: round1(acc.fiber + entry.fiber),
+      kcal: acc.kcal + entry.kcal,
+    }),
+    { protein: 0, carbs: 0, fat: 0, fiber: 0, kcal: 0 }
+  );
+}
+
+/**
+ * Sprint 5.1 — progreso nutricional del día: consumido (suma de los
+ * registros de hoy) vs. objetivo (del `NutritionProfile`), con el % ya
+ * resuelto por macro. Si todavía no hay perfil configurado, el objetivo
+ * queda en 0 y el % también (nada para comparar). No reemplaza
+ * `getNutritionProgress` (Sprint 3.x, basado en `MEAL_CATALOG`/kcal, del
+ * que sigue dependiendo `getDashboardSummary` sin tocarse) — es el
+ * progreso del nuevo sistema de comidas, pensado para mostrarse dentro
+ * del propio módulo de Nutrición.
+ */
+export function getNutritionDailyProgress(date?: string): NutritionDailyProgress {
+  const consumed = getNutritionDailyTotals(date);
+  const profile = getNutritionProfile();
+  const target = {
+    protein: profile?.targetProtein ?? 0,
+    carbs: profile?.targetCarbs ?? 0,
+    fat: profile?.targetFat ?? 0,
+    fiber: profile?.targetFiber ?? 0,
+    kcal: profile?.targetCalories ?? 0,
+  };
+
+  function percentOf(consumedValue: number, targetValue: number): number {
+    if (targetValue <= 0) return 0;
+    return Math.min(100, Math.round((consumedValue / targetValue) * 100));
+  }
+
+  return {
+    consumed,
+    target,
+    percent: {
+      protein: percentOf(consumed.protein, target.protein),
+      carbs: percentOf(consumed.carbs, target.carbs),
+      fat: percentOf(consumed.fat, target.fat),
+      fiber: percentOf(consumed.fiber, target.fiber),
+      kcal: percentOf(consumed.kcal, target.kcal),
+    },
+  };
+}
+
+/**
+ * Sprint 5.2 — "Motor de análisis nutricional". Todo lo de acá LEE
+ * `MealCompletionLog` (vía `getMealCompletionLog`, ya existente) y
+ * deriva — no se guarda ninguna estadística en localStorage, así que
+ * nunca se puede desincronizar del registro real. `MEAL_TEMPLATES` sigue
+ * siendo solo plantilla y `FOOD_CATALOG` la única fuente de macros; este
+ * motor no les toca ni un campo.
+ */
+
+const WEEKDAY_LABELS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+/** Cantidad de tipos de comida que existen hoy en el sistema (4: desayuno/almuerzo/merienda/cena) — derivada de `MEAL_TEMPLATES`, nunca un "4" repetido a mano en varios lugares. */
+const EXPECTED_MEAL_TYPES: MealSlot[] = Array.from(new Set(MEAL_TEMPLATES.map((template) => template.mealType)));
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function diffInDays(startStr: string, endStr: string): number {
+  const start = new Date(startStr + "T00:00:00").getTime();
+  const end = new Date(endStr + "T00:00:00").getTime();
+  return Math.round((end - start) / 86_400_000);
+}
+
+function getMondayOf(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getDay(); // 0 = domingo .. 6 = sábado
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Rango [inicio, fin] de la semana o el mes que contiene `referenceDate`, con `fin` capado a hoy (un período en curso nunca cuenta días futuros). */
+function getPeriodRange(
+  period: NutritionStatsPeriod,
+  referenceDate: string
+): { start: string; end: string; daysElapsed: number } {
+  const today = todayKey();
+  let start: string;
+  let end: string;
+
+  if (period === "semana") {
+    start = getMondayOf(referenceDate);
+    end = addDays(start, 6);
+  } else {
+    const d = new Date(referenceDate + "T00:00:00");
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    start = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    end = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  }
+
+  const cappedEnd = end > today ? today : end;
+  const daysElapsed = start > cappedEnd ? 0 : diffInDays(start, cappedEnd) + 1;
+  return { start, end: cappedEnd, daysElapsed };
+}
+
+function getKeysWithPrefix(prefix: string): string[] {
+  if (!isBrowser()) return [];
+  const keys: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (key && key.startsWith(prefix)) keys.push(key);
+  }
+  return keys;
+}
+
+/** Todas las fechas (YYYY-MM-DD) que tienen al menos un registro guardado, ordenadas. */
+function getAllNutritionLogDates(): string[] {
+  return getKeysWithPrefix(NUTRITION_LOG_KEY_PREFIX)
+    .map((key) => key.slice(NUTRITION_LOG_KEY_PREFIX.length))
+    .sort();
+}
+
+/**
+ * Rollup de un solo día — la unidad mínima de la que sale todo lo demás.
+ * `mealsCompleted` cuenta TIPOS de comida distintos completados ese día
+ * (si en el futuro se permite "reemplazar" y quedan 2 registros del
+ * mismo tipo, igual cuenta como 1 comida realizada, no 2).
+ */
+export function computeNutritionDailyStat(date: string): NutritionDailyStat {
+  const log = getMealCompletionLog(date);
+  const completedTypes = new Set(log.map((entry) => entry.mealType));
+  const totals = log.reduce(
+    (acc, entry) => ({
+      protein: acc.protein + entry.protein,
+      carbs: acc.carbs + entry.carbs,
+      fat: acc.fat + entry.fat,
+      fiber: acc.fiber + entry.fiber,
+      kcal: acc.kcal + entry.kcal,
+    }),
+    { protein: 0, carbs: 0, fat: 0, fiber: 0, kcal: 0 }
+  );
+
+  return {
+    date,
+    mealsCompleted: completedTypes.size,
+    mealsExpected: EXPECTED_MEAL_TYPES.length,
+    adherencePercent:
+      EXPECTED_MEAL_TYPES.length > 0 ? Math.round((completedTypes.size / EXPECTED_MEAL_TYPES.length) * 100) : 0,
+    protein: round1(totals.protein),
+    carbs: round1(totals.carbs),
+    fat: round1(totals.fat),
+    fiber: round1(totals.fiber),
+    kcal: Math.round(totals.kcal),
+  };
+}
+
+/** Un `NutritionDailyStat` por cada día entre `start` y `end` (inclusive) — incluye los días sin ningún registro (quedan en 0). */
+export function getNutritionDailyStats(start: string, end: string): NutritionDailyStat[] {
+  const stats: NutritionDailyStat[] = [];
+  let cursor = start;
+  let guard = 0;
+  while (cursor <= end && guard < 400) {
+    stats.push(computeNutritionDailyStat(cursor));
+    cursor = addDays(cursor, 1);
+    guard += 1;
+  }
+  return stats;
+}
+
+/**
+ * Promedio de adherencia por día de la semana (Lunes, Martes, ...) a lo
+ * largo de TODO el historial disponible — es un patrón estructural
+ * ("los domingos rindo menos"), no algo que tenga sentido acotar a una
+ * sola semana. `[]` si todavía no hay ningún registro.
+ */
+export function getNutritionWeekdayStats(): NutritionWeekdayStat[] {
+  const dates = getAllNutritionLogDates();
+  if (dates.length === 0) return [];
+
+  const dailyStats = getNutritionDailyStats(dates[0], todayKey());
+  const buckets = new Map<number, number[]>();
+  for (const day of dailyStats) {
+    const weekday = new Date(day.date + "T00:00:00").getDay();
+    const list = buckets.get(weekday) ?? [];
+    list.push(day.adherencePercent);
+    buckets.set(weekday, list);
+  }
+
+  return Array.from(buckets.entries())
+    .map(([weekday, percents]) => ({
+      weekday,
+      weekdayLabel: WEEKDAY_LABELS[weekday],
+      averageAdherencePercent: Math.round(percents.reduce((sum, p) => sum + p, 0) / percents.length),
+      daysCounted: percents.length,
+    }))
+    .sort((a, b) => a.weekday - b.weekday);
+}
+
+/**
+ * Racha de días con adherencia 100% (los 4 tipos de comida completados
+ * ese día). Mismo algoritmo que ya usa `getStreak()` para el Acero
+ * (caminar hacia atrás desde hoy) — acá aplicado a nutrición.
+ */
+export function getNutritionStreaks(): NutritionStreaks {
+  const dates = getAllNutritionLogDates();
+  if (dates.length === 0) return { current: 0, best: 0 };
+
+  function isFullyAdherent(date: string): boolean {
+    const stat = computeNutritionDailyStat(date);
+    return stat.mealsExpected > 0 && stat.mealsCompleted >= stat.mealsExpected;
+  }
+
+  let current = 0;
+  const cursor = new Date();
+  const todayStr = cursor.toISOString().slice(0, 10);
+  if (!isFullyAdherent(todayStr)) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  while (true) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (!isFullyAdherent(key)) break;
+    current += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  let best = 0;
+  let run = 0;
+  for (const day of getNutritionDailyStats(dates[0], todayStr)) {
+    if (day.mealsExpected > 0 && day.mealsCompleted >= day.mealsExpected) {
+      run += 1;
+      best = Math.max(best, run);
+    } else {
+      run = 0;
+    }
+  }
+
+  return { current, best: Math.max(best, current) };
+}
+
+function toChartSeries(
+  id: string,
+  label: string,
+  unit: string,
+  dailyStats: NutritionDailyStat[],
+  pick: (day: NutritionDailyStat) => number
+): NutritionChartSeries {
+  return { id, label, unit, points: dailyStats.map((day) => ({ x: day.date, value: pick(day) })) };
+}
+
+function buildNutritionCharts(
+  dailyStats: NutritionDailyStat[],
+  weekdayStats: NutritionWeekdayStat[]
+): NutritionAnalyticsReport["charts"] {
+  return {
+    weeklyAdherence: toChartSeries("adherence", "Adherencia diaria", "%", dailyStats, (d) => d.adherencePercent),
+    proteinEvolution: toChartSeries("protein", "Proteína", "g", dailyStats, (d) => d.protein),
+    carbsEvolution: toChartSeries("carbs", "Carbohidratos", "g", dailyStats, (d) => d.carbs),
+    fatEvolution: toChartSeries("fat", "Grasas", "g", dailyStats, (d) => d.fat),
+    mealsCompliance: toChartSeries("meals", "Comidas realizadas", "comidas", dailyStats, (d) => d.mealsCompleted),
+    adherenceByWeekday: {
+      id: "adherence-weekday",
+      label: "Adherencia por día de la semana",
+      unit: "%",
+      points: weekdayStats.map((w) => ({ x: w.weekdayLabel, value: w.averageAdherencePercent })),
+    },
+  };
+}
+
+/**
+ * Sprint 5.2 — punto de entrada principal del motor de análisis: arma el
+ * reporte completo de una semana o un mes (la que contiene
+ * `referenceDate`, default hoy). Mismo patrón que `getDashboardSummary`:
+ * un solo objeto agregado, calculado a partir de piezas que ya existen,
+ * nada se calcula dos veces.
+ */
+export function getNutritionAnalytics(period: NutritionStatsPeriod, referenceDate?: string): NutritionAnalyticsReport {
+  const ref = referenceDate ?? todayKey();
+  const { start, end, daysElapsed } = getPeriodRange(period, ref);
+  const dailyStats = getNutritionDailyStats(start, end);
+
+  const mealsCompleted = dailyStats.reduce((sum, d) => sum + d.mealsCompleted, 0);
+  const mealsExpected = dailyStats.reduce((sum, d) => sum + d.mealsExpected, 0);
+  const mealsOmitted = Math.max(0, mealsExpected - mealsCompleted);
+  const adherencePercent = mealsExpected > 0 ? Math.round((mealsCompleted / mealsExpected) * 100) : 0;
+
+  const totals = dailyStats.reduce(
+    (acc, d) => ({
+      protein: acc.protein + d.protein,
+      carbs: acc.carbs + d.carbs,
+      fat: acc.fat + d.fat,
+      fiber: acc.fiber + d.fiber,
+      kcal: acc.kcal + d.kcal,
+    }),
+    { protein: 0, carbs: 0, fat: 0, fiber: 0, kcal: 0 }
+  );
+  const dayCount = Math.max(1, dailyStats.length);
+  const averages: MealMacros = {
+    protein: round1(totals.protein / dayCount),
+    carbs: round1(totals.carbs / dayCount),
+    fat: round1(totals.fat / dayCount),
+    fiber: round1(totals.fiber / dayCount),
+    kcal: Math.round(totals.kcal / dayCount),
+  };
+
+  const weekdayStats = getNutritionWeekdayStats();
+  const bestWeekday =
+    weekdayStats.length > 0
+      ? weekdayStats.reduce((best, w) => (w.averageAdherencePercent > best.averageAdherencePercent ? w : best))
+      : null;
+  const worstWeekday =
+    weekdayStats.length > 0
+      ? weekdayStats.reduce((worst, w) => (w.averageAdherencePercent < worst.averageAdherencePercent ? w : worst))
+      : null;
+  const streaks = getNutritionStreaks();
+
+  return {
+    period,
+    periodStart: start,
+    periodEnd: end,
+    daysElapsed,
+    mealsCompleted,
+    mealsExpected,
+    mealsOmitted,
+    adherencePercent,
+    averages,
+    waterAverageMl: null,
+    bestWeekday,
+    worstWeekday,
+    weekdayStats,
+    currentStreak: streaks.current,
+    bestStreak: streaks.best,
+    dailyStats,
+    charts: buildNutritionCharts(dailyStats, weekdayStats),
+  };
+}
+
+/** Sprint 5.2.1 — |cambio| por debajo de esto se considera ruido normal, no una tendencia ("≈ Estable"). */
+const STABLE_THRESHOLD_PERCENT = 3;
+
+function computeTrendMetric(
+  metric: NutritionTrendMetric["metric"],
+  label: string,
+  unit: string,
+  current: number,
+  baseline: number
+): NutritionTrendMetric {
+  const changePercent = baseline > 0 ? Math.round(((current - baseline) / baseline) * 100) : current > 0 ? 100 : 0;
+  const direction: TrendDirection =
+    Math.abs(changePercent) <= STABLE_THRESHOLD_PERCENT ? "stable" : changePercent > 0 ? "up" : "down";
+  return { metric, label, unit, current: round1(current), baseline: round1(baseline), changePercent, direction };
+}
+
+/**
+ * Sprint 5.2.1 — "¿Estoy mejorando?": compara el período actual contra
+ * el PROMEDIO de los `baselinePeriods` períodos anteriores (default 4),
+ * no contra un único período aislado — una sola semana rara no debería
+ * disparar una flecha de tendencia. Reutiliza `getNutritionAnalytics`
+ * para cada período — el Analytics Engine sigue siendo el único lugar
+ * donde se calculan macros/adherencia.
+ */
+export function getNutritionTrends(
+  period: NutritionStatsPeriod,
+  referenceDate?: string,
+  baselinePeriods: number = 4
+): NutritionTrends {
+  const ref = referenceDate ?? todayKey();
+  const currentReport = getNutritionAnalytics(period, ref);
+
+  const previousReports: NutritionAnalyticsReport[] = [];
+  let cursorRef = addDays(currentReport.periodStart, -1);
+  for (let i = 0; i < baselinePeriods; i++) {
+    const previousReport = getNutritionAnalytics(period, cursorRef);
+    previousReports.push(previousReport);
+    cursorRef = addDays(previousReport.periodStart, -1);
+  }
+
+  function baselineAverage(pick: (report: NutritionAnalyticsReport) => number): number {
+    const withData = previousReports.filter((report) => report.daysElapsed > 0);
+    if (withData.length === 0) return 0;
+    return withData.reduce((sum, report) => sum + pick(report), 0) / withData.length;
+  }
+
+  const metrics: NutritionTrendMetric[] = [
+    computeTrendMetric(
+      "protein",
+      "Proteína",
+      "g",
+      currentReport.averages.protein,
+      baselineAverage((r) => r.averages.protein)
+    ),
+    computeTrendMetric(
+      "carbs",
+      "Carbohidratos",
+      "g",
+      currentReport.averages.carbs,
+      baselineAverage((r) => r.averages.carbs)
+    ),
+    computeTrendMetric("fat", "Grasas", "g", currentReport.averages.fat, baselineAverage((r) => r.averages.fat)),
+    computeTrendMetric(
+      "fiber",
+      "Fibra",
+      "g",
+      currentReport.averages.fiber,
+      baselineAverage((r) => r.averages.fiber)
+    ),
+    computeTrendMetric(
+      "kcal",
+      "Calorías",
+      "kcal",
+      currentReport.averages.kcal,
+      baselineAverage((r) => r.averages.kcal)
+    ),
+    computeTrendMetric(
+      "adherencePercent",
+      "Adherencia",
+      "%",
+      currentReport.adherencePercent,
+      baselineAverage((r) => r.adherencePercent)
+    ),
+  ];
+
+  return {
+    period,
+    periodStart: currentReport.periodStart,
+    periodEnd: currentReport.periodEnd,
+    baselinePeriods,
+    metrics,
+  };
+}
+
+/**
+ * Sprint 5.2.1 — único punto de entrada para recomendaciones automáticas
+ * ("insights"). Hoy no genera nada — sin IA ni motor de reglas todavía,
+ * tal como pide el spec ("solo preparar el modelo"). `report`/`trends`
+ * ya quedan como parámetros para cuando esa lógica se implemente, así
+ * nunca hace falta cambiar la firma ni el lugar donde vive. Cualquier
+ * recomendación futura (de reglas simples o de una IA real) debe salir
+ * de acá, siempre con la forma `NutritionInsight` — nunca de otro lado.
+ */
+export function getNutritionInsights(report: NutritionAnalyticsReport, trends: NutritionTrends): NutritionInsight[] {
+  if (!report || !trends) return [];
+  return [];
+}
+
+/**
+ * Sprint 5.2 (actualizado en 5.2.1) — junta todo lo que un informe
+ * descargable futuro va a necesitar (resumen, objetivos, promedios,
+ * gráficos, cumplimiento, historial, tendencias, insights). Reutiliza
+ * `getNutritionAnalytics`/`getNutritionTrends`/`getNutritionInsights` —
+ * nada se recalcula distinto acá. Todavía NO exporta nada (ni PDF ni
+ * archivo): eso es un sprint futuro.
+ */
+export function getNutritionReportData(): NutritionReportData {
+  const today = todayKey();
+  const week = getNutritionAnalytics("semana", today);
+  const month = getNutritionAnalytics("mes", today);
+  const trends = getNutritionTrends("semana", today);
+  const history = getNutritionDailyStats(addDays(today, -59), today);
+  const insights = getNutritionInsights(week, trends);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    profile: getNutritionProfile(),
+    today: getNutritionDailyProgress(today),
+    week,
+    month,
+    trends,
+    history,
+    insights,
+  };
 }
 
 /* ------------------------------------------------------------------ */
