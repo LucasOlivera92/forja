@@ -389,6 +389,13 @@ export interface FoodCatalogItem {
   name: string;
   unit: FoodUnit;
   /**
+   * Sprint 5.3 — reutiliza `FavoriteFoodCategory` (ya definida arriba
+   * para el selector de favoritos de Sprint 5.0) en vez de inventar una
+   * segunda taxonomía de categorías. La usa el Shopping Engine para
+   * agrupar la lista de compras.
+   */
+  category: FavoriteFoodCategory;
+  /**
    * Macros por 100 (si `unit` es "g" o "ml") o por 1 (si `unit` es
    * "unidad") — la cantidad de referencia se deriva siempre de `unit` en
    * vez de guardarse como campo aparte (mismo motivo que el kcal: evitar
@@ -486,6 +493,71 @@ export interface NutritionDailyProgress {
     fiber: number;
     kcal: number;
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Nutrición — Planificación semanal + Shopping Engine (Sprint 5.3)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sprint 5.3 — días de una semana "genérica" (Lunes a Domingo), NO atada
+ * a una fecha calendario: es un plan reutilizable, no algo que se rehaga
+ * cada semana. Distinto del indexado 0-6 (domingo-primero) que usa el
+ * Motor de Análisis (Sprint 5.2) para agrupar historial real por fecha —
+ * son dos conceptos distintos (plan futuro genérico vs. historial real
+ * pasado) que no tiene sentido forzar a compartir la misma forma.
+ */
+export type Weekday = "lunes" | "martes" | "miercoles" | "jueves" | "viernes" | "sabado" | "domingo";
+
+/**
+ * Sprint 5.3 — la planificación semanal completa: qué Meal Template eligió
+ * el usuario para cada día × tipo de comida (7×4 = 28 casilleros). `null`
+ * = todavía sin elegir. Guarda solo el `id` de la `MealTemplate` — nunca
+ * copia nombre/ingredientes/macros (`MealTemplate` sigue siendo la única
+ * fuente de la planificación en sí).
+ */
+export type WeeklyMealPlan = Record<Weekday, Record<MealSlot, string | null>>;
+
+/** Sprint 5.3 — cuántos de los 28 casilleros ya tienen una comida elegida. */
+export interface WeeklyMealPlanCompletion {
+  planned: number;
+  total: number;
+}
+
+/**
+ * Sprint 5.3 — "Shopping Engine": un ingrediente ya sumado a lo largo de
+ * TODA la semana planificada. `category`/`unit`/`name` vienen siempre de
+ * `FOOD_CATALOG` (única fuente) — acá no se vuelve a escribir ningún dato
+ * del alimento, solo se lee y se suma `quantity`.
+ */
+export interface ShoppingListItem {
+  foodId: string;
+  name: string;
+  category: FavoriteFoodCategory;
+  unit: FoodUnit;
+  /** Suma de las cantidades de todas las comidas planificadas que usan este alimento, en la unidad propia del alimento (g/ml/unidad). */
+  quantity: number;
+}
+
+/** Sprint 5.3 — un grupo de la lista de compras (Fase 3: agrupado por categoría). */
+export interface ShoppingListCategoryGroup {
+  category: FavoriteFoodCategory;
+  /** Ya con emoji y texto listos para mostrar ("🥩 Proteínas") — la UI no decide el texto, solo lo imprime. */
+  categoryLabel: string;
+  items: ShoppingListItem[];
+}
+
+/**
+ * Sprint 5.3 — resultado completo del Shopping Engine. Esta es también la
+ * "arquitectura preparada" para la futura exportación (Fase 4: imprimir/
+ * PDF/compartir/exportar) — ya es una estructura plana, serializable y
+ * lista para volcarse a cualquier formato sin tener que recalcular nada;
+ * ningún sprint todavía implementa esa exportación.
+ */
+export interface ShoppingList {
+  generatedAt: string;
+  planned: WeeklyMealPlanCompletion;
+  groups: ShoppingListCategoryGroup[];
 }
 
 /* ------------------------------------------------------------------ */

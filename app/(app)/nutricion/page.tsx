@@ -158,9 +158,21 @@ export default function NutricionPage() {
           </Button>
         </Link>
       </div>
-      <Link href="/nutricion/estadisticas">
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/nutricion/estadisticas">
+          <Button type="button" variant="secondary">
+            📊 Ver estadísticas
+          </Button>
+        </Link>
+        <Link href="/nutricion/planificacion">
+          <Button type="button" variant="secondary">
+            🗓️ Planificación semanal
+          </Button>
+        </Link>
+      </div>
+      <Link href="/nutricion/lista-compras">
         <Button type="button" variant="secondary">
-          📊 Ver estadísticas
+          🛒 Lista de compras
         </Button>
       </Link>
 

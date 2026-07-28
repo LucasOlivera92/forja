@@ -43,7 +43,13 @@ import {
   NutritionTrendMetric,
   NutritionTrends,
   NutritionWeekdayStat,
+  ShoppingList,
+  ShoppingListCategoryGroup,
+  ShoppingListItem,
   TrendDirection,
+  Weekday,
+  WeeklyMealPlan,
+  WeeklyMealPlanCompletion,
   Routine,
   RoutineDayPlan,
   RoutineExecution,
@@ -77,6 +83,7 @@ const EXECUTIONS_KEY_PREFIX = "forja.executions.";
 const FAVORITE_EXERCISES_KEY = "forja.exercises.favorites";
 const NUTRITION_PROFILE_KEY = "forja.nutrition.profile";
 const NUTRITION_LOG_KEY_PREFIX = "forja.nutrition.log.";
+const WEEKLY_MEAL_PLAN_KEY = "forja.nutrition.weeklyPlan";
 
 function todayKey(date?: string): string {
   return date ?? new Date().toISOString().slice(0, 10);
@@ -1612,8 +1619,9 @@ function getAllNutritionLogDates(): string[] {
  * (si en el futuro se permite "reemplazar" y quedan 2 registros del
  * mismo tipo, igual cuenta como 1 comida realizada, no 2).
  */
-export function computeNutritionDailyStat(date: string): NutritionDailyStat {
-  const log = getMealCompletionLog(date);
+export function computeNutritionDailyStat(date?: string): NutritionDailyStat {
+  const key = todayKey(date);
+  const log = getMealCompletionLog(key);
   const completedTypes = new Set(log.map((entry) => entry.mealType));
   const totals = log.reduce(
     (acc, entry) => ({
@@ -1627,7 +1635,7 @@ export function computeNutritionDailyStat(date: string): NutritionDailyStat {
   );
 
   return {
-    date,
+    date: key,
     mealsCompleted: completedTypes.size,
     mealsExpected: EXPECTED_MEAL_TYPES.length,
     adherencePercent:
@@ -1953,6 +1961,144 @@ export function getNutritionReportData(): NutritionReportData {
     trends,
     history,
     insights,
+  };
+}
+
+/**
+ * Sprint 5.3 — "Planificación semanal + Shopping Engine". El usuario solo
+ * elige qué Meal Template corresponde a cada día × tipo de comida — nunca
+ * escribe una lista ni suma cantidades a mano (Filosofía FORJA,
+ * AGENTS.md: "registrar debe ser más rápido que recordar"). Reutiliza
+ * `MEAL_TEMPLATES`/`FOOD_CATALOG` tal cual existen: la planificación
+ * solo guarda `mealTemplateId` por casillero, nunca copia nombres,
+ * ingredientes ni macros.
+ */
+
+const WEEKDAYS: Weekday[] = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
+
+function buildEmptyWeeklyMealPlan(): WeeklyMealPlan {
+  return WEEKDAYS.reduce((plan, weekday) => {
+    plan[weekday] = EXPECTED_MEAL_TYPES.reduce(
+      (slots, mealType) => {
+        slots[mealType] = null;
+        return slots;
+      },
+      {} as Record<MealSlot, string | null>
+    );
+    return plan;
+  }, {} as WeeklyMealPlan);
+}
+
+/** `null` en cualquier casillero significa "todavía sin elegir" — nunca falta un día/tipo, el plan vacío ya trae los 28 casilleros. */
+export function getWeeklyMealPlan(): WeeklyMealPlan {
+  return readJSON<WeeklyMealPlan>(WEEKLY_MEAL_PLAN_KEY, buildEmptyWeeklyMealPlan());
+}
+
+/**
+ * Elegir (o quitar, con `mealTemplateId: null`) la Meal Template de un
+ * día × tipo de comida. Un solo toque en la UI = un solo llamado acá,
+ * sin botón "Guardar" (mismo patrón que favoritos/objetivos). Ignora en
+ * silencio un `mealTemplateId` que no exista o que sea de otro tipo de
+ * comida — nunca deja el plan en un estado inconsistente.
+ */
+export function setWeeklyMealPlanSlot(
+  weekday: Weekday,
+  mealType: MealSlot,
+  mealTemplateId: string | null
+): WeeklyMealPlan {
+  if (mealTemplateId) {
+    const template = getMealTemplate(mealTemplateId);
+    if (!template || template.mealType !== mealType) return getWeeklyMealPlan();
+  }
+
+  const plan = getWeeklyMealPlan();
+  const updated: WeeklyMealPlan = { ...plan, [weekday]: { ...plan[weekday], [mealType]: mealTemplateId } };
+  writeJSON(WEEKLY_MEAL_PLAN_KEY, updated);
+  return updated;
+}
+
+/** Cuántos de los 28 casilleros (7 días × 4 tipos) ya tienen una comida elegida. Reutilizado tanto por la pantalla de planificación como por el Shopping Engine. */
+export function getWeeklyMealPlanCompletion(): WeeklyMealPlanCompletion {
+  const plan = getWeeklyMealPlan();
+  let planned = 0;
+  for (const weekday of WEEKDAYS) {
+    for (const mealType of EXPECTED_MEAL_TYPES) {
+      if (plan[weekday][mealType]) planned += 1;
+    }
+  }
+  return { planned, total: WEEKDAYS.length * EXPECTED_MEAL_TYPES.length };
+}
+
+/** Fase 3 del spec: etiqueta lista para mostrar (emoji + texto) por categoría — la UI de la lista de compras no decide texto, solo lo imprime. */
+const SHOPPING_CATEGORY_LABELS: Record<FavoriteFoodCategory, string> = {
+  proteinas: "🥩 Proteínas",
+  carbohidratos: "🟡 Carbohidratos",
+  frutas: "🍎 Frutas",
+  verduras: "🥬 Verduras",
+  grasas: "🥜 Grasas saludables",
+};
+
+/** Mismo orden que el ejemplo del spec (Fase 3). */
+const SHOPPING_CATEGORY_ORDER: FavoriteFoodCategory[] = ["proteinas", "carbohidratos", "frutas", "verduras", "grasas"];
+
+/**
+ * Sprint 5.3 — "Shopping Engine": recorre toda `getWeeklyMealPlan()`,
+ * suma automáticamente la cantidad de cada alimento a través de todas
+ * las comidas planificadas de la semana, y agrupa el resultado por
+ * categoría (Fase 2 + Fase 3 del spec). Nunca lee ni escribe macros —
+ * solo `quantity` por alimento — y nunca duplica `FOOD_CATALOG` ni
+ * `MEAL_TEMPLATES`: por cada casillero elegido busca la `MealTemplate`
+ * (`getMealTemplate`, ya existente) y por cada ingrediente busca el
+ * alimento (`getFoodById`, ya existente) — cero lógica repetida.
+ *
+ * El objeto que devuelve YA es la "arquitectura preparada" para
+ * imprimir/exportar/compartir (Fase 4): es plano, serializable, y trae
+ * categoría + ingrediente + cantidad + unidad, exactamente lo que un PDF
+ * o un texto para compartir necesitarían — ningún sprint todavía arma
+ * ese archivo, pero no va a hacer falta tocar este cálculo para lograrlo.
+ */
+export function getShoppingList(): ShoppingList {
+  const plan = getWeeklyMealPlan();
+  const quantities = new Map<string, number>();
+
+  for (const weekday of WEEKDAYS) {
+    for (const mealType of EXPECTED_MEAL_TYPES) {
+      const templateId = plan[weekday][mealType];
+      if (!templateId) continue;
+      const template = getMealTemplate(templateId);
+      if (!template) continue;
+      for (const item of template.items) {
+        quantities.set(item.foodId, (quantities.get(item.foodId) ?? 0) + item.quantity);
+      }
+    }
+  }
+
+  const items: ShoppingListItem[] = Array.from(quantities.entries())
+    .map(([foodId, quantity]) => {
+      const food = getFoodById(foodId);
+      if (!food) return null;
+      const item: ShoppingListItem = {
+        foodId,
+        name: food.name,
+        category: food.category,
+        unit: food.unit,
+        quantity: round1(quantity),
+      };
+      return item;
+    })
+    .filter((item): item is ShoppingListItem => item !== null)
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+
+  const groups: ShoppingListCategoryGroup[] = SHOPPING_CATEGORY_ORDER.map((category) => ({
+    category,
+    categoryLabel: SHOPPING_CATEGORY_LABELS[category],
+    items: items.filter((item) => item.category === category),
+  })).filter((group) => group.items.length > 0);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    planned: getWeeklyMealPlanCompletion(),
+    groups,
   };
 }
 

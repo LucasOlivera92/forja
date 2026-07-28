@@ -7,14 +7,23 @@ import { Button } from "@/shared/ui/Button";
 import { AceroElement } from "@/shared/ui/AceroElement";
 import { ProgressBar } from "@/shared/ui/ProgressBar";
 import {
+  computeNutritionDailyStat,
   getCurrentDayPointer,
   getDashboardSummary,
   getDayPlan,
   getDaySummary,
+  getNutritionDailyProgress,
   getRoutine,
   getWeek,
 } from "@/lib/mock/repository";
-import { DashboardSummary, DayPointer, DaySummary, RoutineDayPlan } from "@/lib/mock/types";
+import {
+  DashboardSummary,
+  DayPointer,
+  DaySummary,
+  NutritionDailyProgress,
+  NutritionDailyStat,
+  RoutineDayPlan,
+} from "@/lib/mock/types";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -29,6 +38,8 @@ interface TodayInfo {
   weekNumber: number | null;
   dayPlan: RoutineDayPlan | null;
   daySummary: DaySummary | null;
+  nutritionDaily: NutritionDailyStat;
+  nutritionProgress: NutritionDailyProgress;
 }
 
 /**
@@ -48,9 +59,17 @@ interface TodayInfo {
  * (todas de Sprint 3.x, sin tocar) para los datos puntuales de la
  * tarjeta "Entrenamiento de hoy" y de "Estadísticas rápidas".
  *
- * No se toca Nutrición (ni su repository ni su pantalla): solo deja de
- * tener una tarjeta de acceso directo acá — sigue disponible desde
- * BottomNav, que tampoco se toca.
+ * Integración con Nutrición (post Sprint 5.2.1): se agrega una tarjeta
+ * más al mismo patrón — `computeNutritionDailyStat()` (comidas de hoy +
+ * adherencia diaria, Sprint 5.2 — Analytics Engine) y
+ * `getNutritionDailyProgress()` (consumido vs. objetivo por macro,
+ * Sprint 5.1) ya existían y ya hacían toda la cuenta; acá solo se leen y
+ * se muestran, en el mismo `useEffect` de siempre. No se agrega ni se
+ * duplica ningún cálculo de nutrición en esta pantalla ni en
+ * repository.ts — el único cambio ahí fue hacer opcional el parámetro
+ * `date` de `computeNutritionDailyStat` (ya lo era en el resto de
+ * funciones de fecha del archivo) para poder pedir "hoy" sin repetir el
+ * formateo de fecha acá.
  */
 export default function HoyPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -59,9 +78,20 @@ export default function HoyPage() {
   useEffect(() => {
     setSummary(getDashboardSummary());
 
+    const nutritionDaily = computeNutritionDailyStat();
+    const nutritionProgress = getNutritionDailyProgress();
+
     const pointer = getCurrentDayPointer();
     if (!pointer) {
-      setToday({ pointer: null, routineName: null, weekNumber: null, dayPlan: null, daySummary: null });
+      setToday({
+        pointer: null,
+        routineName: null,
+        weekNumber: null,
+        dayPlan: null,
+        daySummary: null,
+        nutritionDaily,
+        nutritionProgress,
+      });
     } else {
       setToday({
         pointer,
@@ -69,6 +99,8 @@ export default function HoyPage() {
         weekNumber: getWeek(pointer.weekId, pointer.routineId)?.number ?? null,
         dayPlan: getDayPlan(pointer.weekId, pointer.dayId, pointer.routineId) ?? null,
         daySummary: getDaySummary(pointer.weekId, pointer.dayId, pointer.routineId),
+        nutritionDaily,
+        nutritionProgress,
       });
     }
   }, []);
@@ -85,7 +117,7 @@ export default function HoyPage() {
   }
 
   const { workout, aceroState, weekProgress, streak } = summary;
-  const { pointer, routineName, weekNumber, dayPlan, daySummary } = today;
+  const { pointer, routineName, weekNumber, dayPlan, daySummary, nutritionDaily, nutritionProgress } = today;
   const entrenoHref = pointer ? `/entreno/${pointer.weekId}/${pointer.dayId}` : "/entreno";
 
   const weekComplete = weekProgress.totalDays > 0 && weekProgress.completedDays === weekProgress.totalDays;
@@ -141,6 +173,45 @@ export default function HoyPage() {
         ) : (
           <p className="text-text-secondary text-sm mt-3">No hay entrenamientos pendientes.</p>
         )}
+      </Card>
+
+      <Card raised>
+        <div className="flex items-center justify-between">
+          <p className="text-text-muted text-xs uppercase tracking-wide font-display">🍽️ Nutrición</p>
+          <p className="text-text-secondary text-xs font-medium">
+            {nutritionDaily.mealsCompleted}/{nutritionDaily.mealsExpected} comidas
+          </p>
+        </div>
+
+        <ProgressBar percent={nutritionDaily.adherencePercent} className="mt-3" />
+        <p className="text-text-muted text-[11px] mt-1">Adherencia de hoy: {nutritionDaily.adherencePercent}%</p>
+
+        <div className="flex flex-col gap-1.5 mt-3">
+          <div className="flex items-center justify-between">
+            <p className="text-text-secondary text-sm">🥩 Proteína</p>
+            <p className="text-text-primary text-sm font-medium">
+              {nutritionProgress.consumed.protein} / {nutritionProgress.target.protein} g
+            </p>
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-text-secondary text-sm">⚡ Carbohidratos</p>
+            <p className="text-text-primary text-sm font-medium">
+              {nutritionProgress.consumed.carbs} / {nutritionProgress.target.carbs} g
+            </p>
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-text-secondary text-sm">🥑 Grasas</p>
+            <p className="text-text-primary text-sm font-medium">
+              {nutritionProgress.consumed.fat} / {nutritionProgress.target.fat} g
+            </p>
+          </div>
+        </div>
+
+        <Link href="/nutricion/hoy" className="block mt-4">
+          <Button type="button" variant="secondary">
+            Ver comidas de hoy
+          </Button>
+        </Link>
       </Card>
 
       <Card raised>
