@@ -405,6 +405,16 @@ export interface FoodCatalogItem {
   carbs: number;
   fat: number;
   fiber: number;
+  /**
+   * Sprint 5.5 — trazabilidad obligatoria: de dónde salió este dato
+   * nutricional. Prioridad de fuentes usada en todo el catálogo: (1) USDA
+   * FoodData Central, (2) etiqueta oficial del fabricante para productos
+   * comerciales, (3) FatSecret, (4) Open Food Facts, (5) otra base
+   * reconocida solo si ninguna de las anteriores tiene el alimento. Nunca
+   * "memoria" ni aproximación sin fuente — cada alimento del catálogo
+   * declara la suya acá.
+   */
+  source: string;
 }
 
 /** Sprint 5.1 — un ítem de una Meal Template: solo referencia + cantidad, nunca macros. */
@@ -523,6 +533,7 @@ export interface WeeklyMealPlanCompletion {
   planned: number;
   total: number;
 }
+
 
 /**
  * Sprint 5.3 — "Shopping Engine": un ingrediente ya sumado a lo largo de

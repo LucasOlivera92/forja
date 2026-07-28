@@ -2029,6 +2029,28 @@ export function getWeeklyMealPlanCompletion(): WeeklyMealPlanCompletion {
   return { planned, total: WEEKDAYS.length * EXPECTED_MEAL_TYPES.length };
 }
 
+const REPEATABLE_WEEKDAYS: Weekday[] = ["martes", "miercoles", "jueves", "viernes", "sabado"];
+
+/**
+ * Botón "🔁 Repetir de lunes a sábado" del spec: copia la planificación
+ * completa del lunes (sus 4 casilleros, cada uno elegido de forma
+ * independiente) a martes-sábado de una sola vez. El domingo queda
+ * siempre intacto — el spec lo reserva para comidas libres o
+ * planificación personalizada. Reutiliza `getWeeklyMealPlan`/`writeJSON`;
+ * no vuelve a validar templates porque el lunes ya es, por construcción,
+ * un día válido.
+ */
+export function repeatMondayToSaturday(): WeeklyMealPlan {
+  const plan = getWeeklyMealPlan();
+  const monday = plan.lunes;
+  const updated: WeeklyMealPlan = { ...plan };
+  for (const weekday of REPEATABLE_WEEKDAYS) {
+    updated[weekday] = { ...monday };
+  }
+  writeJSON(WEEKLY_MEAL_PLAN_KEY, updated);
+  return updated;
+}
+
 /** Fase 3 del spec: etiqueta lista para mostrar (emoji + texto) por categoría — la UI de la lista de compras no decide texto, solo lo imprime. */
 const SHOPPING_CATEGORY_LABELS: Record<FavoriteFoodCategory, string> = {
   proteinas: "🥩 Proteínas",
@@ -2040,6 +2062,18 @@ const SHOPPING_CATEGORY_LABELS: Record<FavoriteFoodCategory, string> = {
 
 /** Mismo orden que el ejemplo del spec (Fase 3). */
 const SHOPPING_CATEGORY_ORDER: FavoriteFoodCategory[] = ["proteinas", "carbohidratos", "frutas", "verduras", "grasas"];
+
+/**
+ * Sprint 5.3.2 — el emoji de cada categoría se extrae de
+ * `SHOPPING_CATEGORY_LABELS` (única fuente: "🥩 Proteínas" -> "🥩") en
+ * vez de mantener un segundo mapa categoría→emoji. Lo usa la pantalla de
+ * planificación para ilustrar cada ingrediente de un vistazo, sin
+ * inventar un ícono por alimento (eso exigiría datos nuevos por
+ * alimento, algo que el spec pidió evitar explícitamente).
+ */
+export const CATEGORY_EMOJI: Record<FavoriteFoodCategory, string> = Object.fromEntries(
+  SHOPPING_CATEGORY_ORDER.map((category) => [category, SHOPPING_CATEGORY_LABELS[category].split(" ")[0]])
+) as Record<FavoriteFoodCategory, string>;
 
 /**
  * Sprint 5.3 — "Shopping Engine": recorre toda `getWeeklyMealPlan()`,

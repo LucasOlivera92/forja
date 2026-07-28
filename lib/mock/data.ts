@@ -612,33 +612,150 @@ export const FAVORITE_FOOD_OPTIONS: Record<FavoriteFoodCategory, string[]> = {
  * macros por alimento: las Meal Templates de abajo solo referencian un
  * `id` de acá + una cantidad, nunca guardan proteína/carbohidratos/grasa
  * a mano. Valores por 100g/100ml (o por 1 "unidad" para huevo/banana/
- * kiwi/pan) — estándar de etiqueta nutricional, redondeados. Sin `kcal`:
- * se deriva siempre con la fórmula 4/4/9 en `repository.ts`.
+ * kiwi/pan/scoop) — estándar de etiqueta nutricional, redondeados. Sin
+ * `kcal`: se deriva siempre con la fórmula 4/4/9 en `repository.ts`.
+ *
+ * Sprint 5.4 — "Base Maestra Nutricional real". Se corrigieron los
+ * valores de varios alimentos contra tablas de referencia reales (USDA
+ * FoodData Central para alimentos genéricos, fatsecret.com.ar para el
+ * producto de marca argentina). Dos decisiones de arquitectura quedaron
+ * documentadas en el propio dato:
+ *
+ * 1. `food-pechuga-pollo` usa valores de pechuga CRUDA (spec 5.4:
+ *    "Pollo (pechuga cruda) → 100g"), lo que baja su proteína de 31g a
+ *    23g/100g — esto reduce, no aumenta, la proteína total de las
+ *    comidas que la usan.
+ * 2. `food-arroz-blanco` se mantiene en base COCIDA (no "cruda" como
+ *    sugiere el ejemplo del spec) porque las MealTemplates ya
+ *    referencian cantidades de arroz pensadas como porción cocida
+ *    (150g); pasar a valores crudos multiplicaría por ~3 sus macros sin
+ *    poder tocar la cantidad en la MealTemplate, rompiendo la
+ *    coherencia de macros diarios.
+ *
+ * Sprint 5.5 — "Base Maestra Nutricional definitiva". Catálogo ampliado
+ * a ~90 alimentos para cubrir el uso real de personas en recomposición
+ * corporal / volumen / definición, cada uno con su `source` (Principio
+ * de trazabilidad del sprint — ver JSDoc de `FoodCatalogItem` en
+ * types.ts). Los 25 alimentos de Sprints 5.1-5.4 mantienen exactamente
+ * su `id` y sus valores (ya habían sido corregidos contra fuentes reales
+ * en 5.4) — este sprint solo les agrega `source` y suma alimentos
+ * nuevos, nunca reemplaza uno existente por otro con distinto id.
+ *
+ * Nota de arquitectura — categorías: `FavoriteFoodCategory` (Sprint 5.0)
+ * solo tiene 5 valores (proteinas/carbohidratos/grasas/frutas/verduras).
+ * El spec de este sprint agrupa alimentos en "Legumbres" y "Bebidas",
+ * que no son categorías propias del modelo — agregar categorías nuevas
+ * tocaría el selector de favoritos y el Shopping Engine (explícitamente
+ * fuera de alcance: "No modificar Shopping Engine"). Las legumbres se
+ * catalogan como `carbohidratos` (su macro dominante por peso) y las
+ * bebidas sin macros relevantes (agua/café/té/mate) como
+ * `carbohidratos` también, a modo de bucket neutro documentado acá; la
+ * leche descremada se cataloga como `proteinas` (mismo criterio que
+ * `food-leche-proteica`). Ninguna de las 5 bebidas es usada por ninguna
+ * MealTemplate hoy, así que esta categorización no afecta ningún
+ * cálculo existente — es solo metadata para una futura pantalla de
+ * bebidas.
  */
 export const FOOD_CATALOG: FoodCatalogItem[] = [
-  { id: "food-huevo", name: "Huevo", unit: "unidad", category: "proteinas", protein: 6, carbs: 0.6, fat: 5, fiber: 0 },
-  { id: "food-avena", name: "Avena arrollada", unit: "g", category: "carbohidratos", protein: 13, carbs: 60, fat: 7, fiber: 10 },
-  { id: "food-harina-avena", name: "Harina de avena", unit: "g", category: "carbohidratos", protein: 13, carbs: 62, fat: 7, fiber: 9 },
-  { id: "food-banana", name: "Banana", unit: "unidad", category: "frutas", protein: 1.3, carbs: 27, fat: 0.4, fiber: 3.1 },
-  { id: "food-queso-duro", name: "Queso duro", unit: "g", category: "proteinas", protein: 35, carbs: 0, fat: 28, fiber: 0 },
-  { id: "food-leche-proteica", name: "Leche proteica", unit: "ml", category: "proteinas", protein: 8, carbs: 5, fat: 1, fiber: 0 },
-  { id: "food-arandanos", name: "Arándanos", unit: "g", category: "frutas", protein: 0.7, carbs: 14, fat: 0.3, fiber: 2.4 },
-  { id: "food-kiwi", name: "Kiwi", unit: "unidad", category: "frutas", protein: 0.8, carbs: 10, fat: 0.4, fiber: 2.3 },
-  { id: "food-pechuga-pollo", name: "Pechuga de pollo", unit: "g", category: "proteinas", protein: 31, carbs: 0, fat: 3.6, fiber: 0 },
-  { id: "food-arroz-blanco", name: "Arroz blanco cocido", unit: "g", category: "carbohidratos", protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4 },
-  { id: "food-brocoli", name: "Brócoli", unit: "g", category: "verduras", protein: 2.8, carbs: 7, fat: 0.4, fiber: 2.6 },
-  { id: "food-aceite-oliva", name: "Aceite de oliva", unit: "g", category: "grasas", protein: 0, carbs: 0, fat: 100, fiber: 0 },
-  { id: "food-carne-magra", name: "Carne magra (bife)", unit: "g", category: "proteinas", protein: 26, carbs: 0, fat: 10, fiber: 0 },
-  { id: "food-batata", name: "Batata", unit: "g", category: "carbohidratos", protein: 1.6, carbs: 20, fat: 0.1, fiber: 3 },
-  { id: "food-palta", name: "Palta", unit: "g", category: "grasas", protein: 2, carbs: 9, fat: 15, fiber: 7 },
-  { id: "food-espinaca", name: "Espinaca", unit: "g", category: "verduras", protein: 2.9, carbs: 3.6, fat: 0.4, fiber: 2.2 },
-  { id: "food-yogur-griego", name: "Yogur griego", unit: "g", category: "proteinas", protein: 9, carbs: 4, fat: 5, fiber: 0 },
-  { id: "food-frutos-secos", name: "Frutos secos (mix)", unit: "g", category: "grasas", protein: 20, carbs: 15, fat: 50, fiber: 8 },
-  { id: "food-pan-integral", name: "Pan integral", unit: "unidad", category: "carbohidratos", protein: 3, carbs: 15, fat: 1, fiber: 2 },
-  { id: "food-manteca-mani", name: "Manteca de maní", unit: "g", category: "grasas", protein: 25, carbs: 20, fat: 50, fiber: 6 },
-  { id: "food-salmon", name: "Salmón", unit: "g", category: "proteinas", protein: 20, carbs: 0, fat: 13, fiber: 0 },
-  { id: "food-atun", name: "Atún", unit: "g", category: "proteinas", protein: 26, carbs: 0, fat: 1, fiber: 0 },
-  { id: "food-quinoa", name: "Quinoa cocida", unit: "g", category: "carbohidratos", protein: 4.4, carbs: 21, fat: 1.9, fiber: 2.8 },
+  /* ---------------------------- Proteínas ---------------------------- */
+  { id: "food-huevo", name: "Huevo", unit: "unidad", category: "proteinas", protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-claras", name: "Claras de huevo", unit: "g", category: "proteinas", protein: 10.9, carbs: 0.7, fat: 0.2, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-pechuga-pollo", name: "Pechuga de pollo (cruda)", unit: "g", category: "proteinas", protein: 23, carbs: 0, fat: 2.7, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-muslo-pollo", name: "Muslo de pollo (crudo)", unit: "g", category: "proteinas", protein: 20, carbs: 0, fat: 9.3, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-carne-magra", name: "Carne vacuna magra (bife, cruda)", unit: "g", category: "proteinas", protein: 22, carbs: 0, fat: 7, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-carne-picada-magra", name: "Carne picada magra (cruda)", unit: "g", category: "proteinas", protein: 20, carbs: 0, fat: 10, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-cerdo-magro", name: "Cerdo magro (lomo, crudo)", unit: "g", category: "proteinas", protein: 21, carbs: 0, fat: 2.2, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-pavo", name: "Pavo (pechuga, cruda)", unit: "g", category: "proteinas", protein: 23.7, carbs: 0, fat: 0.7, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-atun", name: "Atún (lata al agua)", unit: "g", category: "proteinas", protein: 25.5, carbs: 0, fat: 0.8, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-salmon", name: "Salmón (crudo)", unit: "g", category: "proteinas", protein: 20.4, carbs: 0, fat: 13.4, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-merluza", name: "Merluza (cruda)", unit: "g", category: "proteinas", protein: 18.6, carbs: 0, fat: 0.9, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-tilapia", name: "Tilapia (cruda)", unit: "g", category: "proteinas", protein: 20, carbs: 0, fat: 1.7, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-langostinos", name: "Langostinos (crudos)", unit: "g", category: "proteinas", protein: 20.1, carbs: 0, fat: 1, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-yogur-griego", name: "Yogur griego natural", unit: "g", category: "proteinas", protein: 9, carbs: 4, fat: 5, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-queso-cottage", name: "Queso cottage", unit: "g", category: "proteinas", protein: 10.6, carbs: 4.8, fat: 2.3, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-queso-untable-light", name: "Queso untable light", unit: "g", category: "proteinas", protein: 3.7, carbs: 4, fat: 13, fiber: 0, source: "FatSecret" },
+  { id: "food-queso-duro", name: "Queso duro", unit: "g", category: "proteinas", protein: 35.8, carbs: 3.2, fat: 25.8, fiber: 0, source: "FatSecret" },
+  { id: "food-whey-protein", name: "Proteína Whey", unit: "unidad", category: "proteinas", protein: 24, carbs: 2, fat: 2, fiber: 0, source: "Etiqueta fabricante" },
+  { id: "food-leche-protein-serenisima", name: "Leche Protein La Serenísima", unit: "ml", category: "proteinas", protein: 5.2, carbs: 4.6, fat: 0, fiber: 0, source: "Etiqueta oficial La Serenísima" },
+  { id: "food-leche-proteica", name: "Leche proteica", unit: "ml", category: "proteinas", protein: 5.2, carbs: 4.6, fat: 1.5, fiber: 0, source: "FatSecret" },
+  { id: "food-leche-descremada", name: "Leche descremada", unit: "ml", category: "proteinas", protein: 3.4, carbs: 5, fat: 0.1, fiber: 0, source: "USDA FoodData Central" },
+
+  /* -------------------------- Carbohidratos -------------------------- */
+  { id: "food-arroz-blanco", name: "Arroz blanco cocido", unit: "g", category: "carbohidratos", protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, source: "USDA FoodData Central" },
+  { id: "food-arroz-integral", name: "Arroz integral (crudo)", unit: "g", category: "carbohidratos", protein: 7.9, carbs: 76, fat: 2.9, fiber: 3.5, source: "USDA FoodData Central" },
+  { id: "food-avena", name: "Avena arrollada", unit: "g", category: "carbohidratos", protein: 16.9, carbs: 66.3, fat: 6.9, fiber: 10.6, source: "USDA FoodData Central" },
+  { id: "food-harina-avena", name: "Harina de avena", unit: "g", category: "carbohidratos", protein: 15, carbs: 68, fat: 7, fiber: 7, source: "USDA FoodData Central" },
+  { id: "food-papa", name: "Papa (cruda)", unit: "g", category: "carbohidratos", protein: 2, carbs: 17.5, fat: 0.1, fiber: 2.2, source: "USDA FoodData Central" },
+  { id: "food-batata", name: "Batata", unit: "g", category: "carbohidratos", protein: 1.5, carbs: 17.7, fat: 0.1, fiber: 2, source: "USDA FoodData Central" },
+  { id: "food-fideos-secos", name: "Fideos secos", unit: "g", category: "carbohidratos", protein: 13, carbs: 74.7, fat: 1.5, fiber: 3.2, source: "USDA FoodData Central" },
+  { id: "food-fideos-integrales", name: "Fideos integrales secos", unit: "g", category: "carbohidratos", protein: 13.9, carbs: 73.4, fat: 2.9, fiber: 9.2, source: "USDA FoodData Central" },
+  { id: "food-quinoa", name: "Quinoa cocida", unit: "g", category: "carbohidratos", protein: 4.4, carbs: 21, fat: 1.9, fiber: 2.8, source: "USDA FoodData Central" },
+  { id: "food-cuscus", name: "Cuscús cocido", unit: "g", category: "carbohidratos", protein: 3.8, carbs: 23, fat: 0.2, fiber: 1.4, source: "USDA FoodData Central" },
+  { id: "food-polenta", name: "Polenta cocida", unit: "g", category: "carbohidratos", protein: 2, carbs: 13.6, fat: 0.3, fiber: 1, source: "FatSecret" },
+  { id: "food-pan-blanco", name: "Pan blanco", unit: "g", category: "carbohidratos", protein: 7.6, carbs: 50.6, fat: 3.3, fiber: 2.4, source: "USDA FoodData Central" },
+  { id: "food-pan-integral", name: "Pan integral", unit: "unidad", category: "carbohidratos", protein: 3.9, carbs: 12.5, fat: 1.1, fiber: 2.1, source: "USDA FoodData Central" },
+  { id: "food-tortilla-trigo", name: "Tortilla de trigo", unit: "g", category: "carbohidratos", protein: 8, carbs: 50, fat: 7, fiber: 2.7, source: "USDA FoodData Central" },
+  { id: "food-tortilla-integral", name: "Tortilla integral", unit: "g", category: "carbohidratos", protein: 9.3, carbs: 47.2, fat: 10.2, fiber: 6, source: "USDA FoodData Central" },
+  { id: "food-lentejas", name: "Lentejas cocidas", unit: "g", category: "carbohidratos", protein: 9.1, carbs: 20.3, fat: 0.4, fiber: 8, source: "USDA FoodData Central" },
+  { id: "food-garbanzos", name: "Garbanzos cocidos", unit: "g", category: "carbohidratos", protein: 8.9, carbs: 27.4, fat: 2.6, fiber: 7.6, source: "USDA FoodData Central" },
+  { id: "food-porotos-negros", name: "Porotos negros cocidos", unit: "g", category: "carbohidratos", protein: 8.9, carbs: 23.7, fat: 0.5, fiber: 8.7, source: "USDA FoodData Central" },
+  { id: "food-porotos-blancos", name: "Porotos blancos cocidos", unit: "g", category: "carbohidratos", protein: 7.5, carbs: 24.3, fat: 0.1, fiber: 7.3, source: "USDA FoodData Central" },
+
+  /* ------------------------------ Frutas ------------------------------ */
+  { id: "food-banana", name: "Banana", unit: "unidad", category: "frutas", protein: 1.3, carbs: 27, fat: 0.4, fiber: 3.1, source: "USDA FoodData Central" },
+  { id: "food-manzana", name: "Manzana", unit: "unidad", category: "frutas", protein: 0.5, carbs: 25, fat: 0.3, fiber: 4.4, source: "USDA FoodData Central" },
+  { id: "food-pera", name: "Pera", unit: "unidad", category: "frutas", protein: 0.7, carbs: 27, fat: 0.3, fiber: 5.5, source: "USDA FoodData Central" },
+  { id: "food-kiwi", name: "Kiwi", unit: "unidad", category: "frutas", protein: 0.9, carbs: 11.1, fat: 0.4, fiber: 2.3, source: "USDA FoodData Central" },
+  { id: "food-mandarina", name: "Mandarina", unit: "unidad", category: "frutas", protein: 0.7, carbs: 11.7, fat: 0.3, fiber: 1.6, source: "USDA FoodData Central" },
+  { id: "food-naranja", name: "Naranja", unit: "unidad", category: "frutas", protein: 1.2, carbs: 15.5, fat: 0.2, fiber: 3.1, source: "USDA FoodData Central" },
+  { id: "food-pomelo", name: "Pomelo", unit: "unidad", category: "frutas", protein: 1.4, carbs: 18.6, fat: 0.2, fiber: 3.7, source: "USDA FoodData Central" },
+  { id: "food-frutillas", name: "Frutillas", unit: "g", category: "frutas", protein: 0.7, carbs: 7.7, fat: 0.3, fiber: 2, source: "USDA FoodData Central" },
+  { id: "food-arandanos", name: "Arándanos", unit: "g", category: "frutas", protein: 0.7, carbs: 14, fat: 0.3, fiber: 2.4, source: "USDA FoodData Central" },
+  { id: "food-uvas", name: "Uvas", unit: "g", category: "frutas", protein: 0.7, carbs: 18.1, fat: 0.2, fiber: 0.9, source: "USDA FoodData Central" },
+  { id: "food-anana", name: "Ananá", unit: "g", category: "frutas", protein: 0.5, carbs: 13, fat: 0.1, fiber: 1.4, source: "USDA FoodData Central" },
+  { id: "food-mango", name: "Mango", unit: "g", category: "frutas", protein: 0.8, carbs: 15, fat: 0.4, fiber: 1.6, source: "USDA FoodData Central" },
+  { id: "food-durazno", name: "Durazno", unit: "unidad", category: "frutas", protein: 1.4, carbs: 15.2, fat: 0.4, fiber: 2.3, source: "USDA FoodData Central" },
+  { id: "food-ciruela", name: "Ciruela", unit: "unidad", category: "frutas", protein: 0.5, carbs: 7.5, fat: 0.2, fiber: 0.9, source: "USDA FoodData Central" },
+
+  /* ----------------------------- Verduras ----------------------------- */
+  { id: "food-tomate", name: "Tomate", unit: "g", category: "verduras", protein: 0.9, carbs: 3.9, fat: 0.2, fiber: 1.2, source: "USDA FoodData Central" },
+  { id: "food-lechuga", name: "Lechuga", unit: "g", category: "verduras", protein: 1.4, carbs: 2.9, fat: 0.2, fiber: 1.3, source: "USDA FoodData Central" },
+  { id: "food-espinaca", name: "Espinaca", unit: "g", category: "verduras", protein: 2.9, carbs: 3.6, fat: 0.4, fiber: 2.2, source: "USDA FoodData Central" },
+  { id: "food-acelga", name: "Acelga", unit: "g", category: "verduras", protein: 1.8, carbs: 3.7, fat: 0.2, fiber: 1.6, source: "USDA FoodData Central" },
+  { id: "food-brocoli", name: "Brócoli", unit: "g", category: "verduras", protein: 2.8, carbs: 6.6, fat: 0.4, fiber: 2.6, source: "USDA FoodData Central" },
+  { id: "food-coliflor", name: "Coliflor", unit: "g", category: "verduras", protein: 1.9, carbs: 5, fat: 0.3, fiber: 2, source: "USDA FoodData Central" },
+  { id: "food-pepino", name: "Pepino", unit: "g", category: "verduras", protein: 0.7, carbs: 3.6, fat: 0.1, fiber: 0.5, source: "USDA FoodData Central" },
+  { id: "food-zanahoria", name: "Zanahoria", unit: "g", category: "verduras", protein: 0.9, carbs: 9.6, fat: 0.2, fiber: 2.8, source: "USDA FoodData Central" },
+  { id: "food-morron-rojo", name: "Morrón rojo", unit: "g", category: "verduras", protein: 1, carbs: 6, fat: 0.3, fiber: 2.1, source: "USDA FoodData Central" },
+  { id: "food-morron-verde", name: "Morrón verde", unit: "g", category: "verduras", protein: 0.9, carbs: 4.6, fat: 0.2, fiber: 1.7, source: "USDA FoodData Central" },
+  { id: "food-cebolla", name: "Cebolla", unit: "g", category: "verduras", protein: 0.9, carbs: 8.5, fat: 0.1, fiber: 1.7, source: "USDA FoodData Central" },
+  { id: "food-zapallito", name: "Zapallito", unit: "g", category: "verduras", protein: 1.2, carbs: 3.1, fat: 0.3, fiber: 1, source: "USDA FoodData Central" },
+  { id: "food-zucchini", name: "Zucchini", unit: "g", category: "verduras", protein: 1.2, carbs: 3.1, fat: 0.3, fiber: 1, source: "USDA FoodData Central" },
+  { id: "food-berenjena", name: "Berenjena", unit: "g", category: "verduras", protein: 1, carbs: 5.9, fat: 0.2, fiber: 3, source: "USDA FoodData Central" },
+  { id: "food-repollo", name: "Repollo", unit: "g", category: "verduras", protein: 1, carbs: 6.4, fat: 0.2, fiber: 2.2, source: "USDA FoodData Central" },
+  { id: "food-remolacha", name: "Remolacha", unit: "g", category: "verduras", protein: 1.7, carbs: 8.8, fat: 0.3, fiber: 3.1, source: "USDA FoodData Central" },
+  { id: "food-apio", name: "Apio", unit: "g", category: "verduras", protein: 0.5, carbs: 3.3, fat: 0.2, fiber: 1.6, source: "USDA FoodData Central" },
+  { id: "food-champinones", name: "Champiñones", unit: "g", category: "verduras", protein: 3.1, carbs: 3.3, fat: 0.3, fiber: 1, source: "USDA FoodData Central" },
+
+  /* -------------------------- Grasas saludables ------------------------ */
+  { id: "food-palta", name: "Palta", unit: "g", category: "grasas", protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, source: "USDA FoodData Central" },
+  { id: "food-aceite-oliva", name: "Aceite de oliva extra virgen", unit: "g", category: "grasas", protein: 0, carbs: 0, fat: 100, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-almendras", name: "Almendras", unit: "g", category: "grasas", protein: 21.2, carbs: 21.6, fat: 49.9, fiber: 12.5, source: "USDA FoodData Central" },
+  { id: "food-nueces", name: "Nueces", unit: "g", category: "grasas", protein: 15.2, carbs: 13.7, fat: 65.2, fiber: 6.7, source: "USDA FoodData Central" },
+  { id: "food-castanas-caju", name: "Castañas de cajú", unit: "g", category: "grasas", protein: 18.2, carbs: 30.2, fat: 43.9, fiber: 3.3, source: "USDA FoodData Central" },
+  { id: "food-pistachos", name: "Pistachos", unit: "g", category: "grasas", protein: 20.2, carbs: 27.7, fat: 45, fiber: 10.6, source: "USDA FoodData Central" },
+  { id: "food-avellanas", name: "Avellanas", unit: "g", category: "grasas", protein: 15, carbs: 16.7, fat: 60.8, fiber: 9.7, source: "USDA FoodData Central" },
+  { id: "food-frutos-secos", name: "Frutos secos (mix)", unit: "g", category: "grasas", protein: 18, carbs: 19, fat: 50, fiber: 10, source: "USDA FoodData Central" },
+  { id: "food-manteca-mani", name: "Mantequilla de maní 100%", unit: "g", category: "grasas", protein: 22, carbs: 24, fat: 50, fiber: 6, source: "USDA FoodData Central" },
+  { id: "food-semillas-chia", name: "Semillas de chía", unit: "g", category: "grasas", protein: 16.5, carbs: 42.1, fat: 30.7, fiber: 34.4, source: "USDA FoodData Central" },
+  { id: "food-semillas-lino", name: "Semillas de lino", unit: "g", category: "grasas", protein: 18.3, carbs: 28.9, fat: 42.2, fiber: 27.3, source: "USDA FoodData Central" },
+  { id: "food-semillas-girasol", name: "Semillas de girasol", unit: "g", category: "grasas", protein: 20.8, carbs: 20, fat: 51.5, fiber: 8.6, source: "USDA FoodData Central" },
+
+  /* ------------------------------ Bebidas ------------------------------ */
+  { id: "food-agua", name: "Agua", unit: "ml", category: "carbohidratos", protein: 0, carbs: 0, fat: 0, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-cafe", name: "Café (negro, sin azúcar)", unit: "ml", category: "carbohidratos", protein: 0.1, carbs: 0.3, fat: 0, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-te", name: "Té (sin azúcar)", unit: "ml", category: "carbohidratos", protein: 0.1, carbs: 0.3, fat: 0, fiber: 0, source: "USDA FoodData Central" },
+  { id: "food-mate", name: "Mate (infusión, sin azúcar)", unit: "ml", category: "carbohidratos", protein: 0.1, carbs: 0.5, fat: 0, fiber: 0, source: "FatSecret" },
 ];
 
 /**
