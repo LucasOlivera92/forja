@@ -56,6 +56,10 @@ export default function RegistroPage() {
       password,
       options: {
         data: { full_name: fullName },
+        // Usa el origen actual (localhost en dev, el dominio real en
+        // producción) en vez de un dominio fijo, para que el link del
+        // email de confirmación funcione en cualquier entorno.
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
