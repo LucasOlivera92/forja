@@ -63,6 +63,7 @@ import {
   WeekProgress,
   WorkoutProgress,
 } from "./types";
+import { getCachedUserId } from "@/lib/auth/client-session";
 
 /**
  * Repositorio mock. Persiste en localStorage con la misma forma de datos
@@ -93,10 +94,44 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
+/* ------------------------------------------------------------------ */
+/* Aislamiento por usuario (Sprint 6.1)                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Todas las claves/prefijos de arriba son "crudas" (sin usuario) a
+ * propósito: son las que usaban las ~30 funciones de este archivo antes
+ * de este sprint, y siguen siendo las mismas — ninguna cambia de nombre
+ * ni de forma. Lo único nuevo es que `readJSON`/`writeJSON`/
+ * `removeKeysWithPrefix`/`getKeysWithPrefix` (los 4 únicos puntos de este
+ * archivo que tocan `window.localStorage`, confirmado por auditoría) le
+ * agregan el namespace del usuario actual ANTES de tocar el storage, y se
+ * lo sacan de nuevo antes de devolver nada — así ninguna de las funciones
+ * de negocio (Entreno/Nutrición) se entera de que el namespace existe.
+ */
+function currentUserNamespace(): string | null {
+  const userId = getCachedUserId();
+  return userId ? `u.${userId}.` : null;
+}
+
+/**
+ * `null` si no hay usuario autenticado — en ese caso, `readJSON` devuelve
+ * el fallback sin tocar storage, y `writeJSON`/`removeKeysWithPrefix` no
+ * escriben ni borran nada. Así se cumple "sin sesión, no leer ni crear
+ * datos de usuario" en los 4 puntos de una sola vez, sin repetir el
+ * chequeo en cada una de las ~30 funciones que los usan.
+ */
+function namespacedKey(rawKey: string): string | null {
+  const ns = currentUserNamespace();
+  return ns ? `${ns}${rawKey}` : null;
+}
+
 function readJSON<T>(key: string, fallback: T): T {
   if (!isBrowser()) return fallback;
+  const nsKey = namespacedKey(key);
+  if (!nsKey) return fallback;
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = window.localStorage.getItem(nsKey);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -106,7 +141,17 @@ function readJSON<T>(key: string, fallback: T): T {
 
 function writeJSON<T>(key: string, value: T): void {
   if (!isBrowser()) return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  const nsKey = namespacedKey(key);
+  if (!nsKey) return;
+  window.localStorage.setItem(nsKey, JSON.stringify(value));
+}
+
+/** Usado solo por `clearNutritionProfile` — mismo namespace que readJSON/writeJSON. */
+function removeJSON(key: string): void {
+  if (!isBrowser()) return;
+  const nsKey = namespacedKey(key);
+  if (!nsKey) return;
+  window.localStorage.removeItem(nsKey);
 }
 
 /**
@@ -121,12 +166,67 @@ function writeJSON<T>(key: string, value: T): void {
  */
 function removeKeysWithPrefix(prefix: string): void {
   if (!isBrowser()) return;
+  const nsPrefix = namespacedKey(prefix);
+  if (!nsPrefix) return;
   const keysToRemove: string[] = [];
   for (let i = 0; i < window.localStorage.length; i++) {
     const key = window.localStorage.key(i);
-    if (key && key.startsWith(prefix)) keysToRemove.push(key);
+    if (key && key.startsWith(nsPrefix)) keysToRemove.push(key);
   }
   keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+}
+
+const LEGACY_MIGRATION_DONE_KEY = "forja.legacyMigration.done";
+
+/** Mismas 9 claves/prefijos de arriba — lista única, no duplicada, para no correr el riesgo de que se desincronice. */
+const LEGACY_EXACT_KEYS = [
+  HISTORY_KEY,
+  CUSTOM_ROUTINES_KEY,
+  FAVORITE_EXERCISES_KEY,
+  NUTRITION_PROFILE_KEY,
+  WEEKLY_MEAL_PLAN_KEY,
+];
+const LEGACY_PREFIXES = [
+  SESSION_KEY_PREFIX,
+  MEALS_KEY_PREFIX,
+  EXECUTIONS_KEY_PREFIX,
+  NUTRITION_LOG_KEY_PREFIX,
+];
+
+/**
+ * Sprint 6.1 — migración local única. Si en este navegador hay datos de
+ * Entreno/Nutrición guardados ANTES de este sprint (sin namespace de
+ * usuario), los copia a la clave namespaceada de `userId`. Nunca borra ni
+ * pisa: si la clave namespaceada ya tiene datos propios, esa clave legacy
+ * puntual se ignora. Corre como máximo una vez por navegador (lo marca
+ * `LEGACY_MIGRATION_DONE_KEY`, una clave global sin namespacear) — así,
+ * si más adelante otra persona usa esta misma computadora, no hereda por
+ * error los datos legacy de quien los creó originalmente.
+ */
+export function migrateLegacyLocalDataToUser(userId: string): void {
+  if (!isBrowser()) return;
+  if (window.localStorage.getItem(LEGACY_MIGRATION_DONE_KEY) === "true") return;
+
+  const ns = `u.${userId}.`;
+  const legacyKeysFound: string[] = [];
+
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (!key) continue;
+    const matches =
+      LEGACY_EXACT_KEYS.includes(key) || LEGACY_PREFIXES.some((prefix) => key.startsWith(prefix));
+    if (matches) legacyKeysFound.push(key);
+  }
+
+  legacyKeysFound.forEach((rawKey) => {
+    const legacyValue = window.localStorage.getItem(rawKey);
+    if (legacyValue === null) return;
+    const nsKey = `${ns}${rawKey}`;
+    if (window.localStorage.getItem(nsKey) !== null) return;
+    window.localStorage.setItem(nsKey, legacyValue);
+  });
+
+  window.localStorage.setItem(LEGACY_MIGRATION_DONE_KEY, "true");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1374,8 +1474,7 @@ export function updateNutritionProfile(patch: UpdateNutritionProfileInput): Nutr
 
 /** Sprint 5.0 — borra el perfil nutricional por completo (vuelve a mostrar "Configurar plan nutricional"). */
 export function clearNutritionProfile(): void {
-  if (!isBrowser()) return;
-  window.localStorage.removeItem(NUTRITION_PROFILE_KEY);
+  removeJSON(NUTRITION_PROFILE_KEY);
 }
 
 /**
@@ -1598,10 +1697,17 @@ function getPeriodRange(
 
 function getKeysWithPrefix(prefix: string): string[] {
   if (!isBrowser()) return [];
+  const ns = currentUserNamespace();
+  if (!ns) return [];
+  const nsPrefix = `${ns}${prefix}`;
   const keys: string[] = [];
   for (let i = 0; i < window.localStorage.length; i++) {
     const key = window.localStorage.key(i);
-    if (key && key.startsWith(prefix)) keys.push(key);
+    // Se devuelve sin el namespace (key.slice(ns.length)) para que el
+    // resultado sea idéntico al de antes de este sprint: quien llama a
+    // esta función (getAllNutritionLogDates) sigue recibiendo las mismas
+    // claves "crudas" que siempre recibió, sin enterarse del namespace.
+    if (key && key.startsWith(nsPrefix)) keys.push(key.slice(ns.length));
   }
   return keys;
 }
