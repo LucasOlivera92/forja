@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
-import { Card } from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
+import { WeekCompletedSummary } from "@/shared/ui/WeekCompletedSummary";
 import { getWeek, getWeekCompletion, resetWeekProgress } from "@/lib/mock/repository";
 import { RoutineWeek } from "@/lib/mock/types";
+import { ROUTINE } from "@/lib/mock/data";
 
 /**
  * Sprint 4.3 — Pantalla de cierre de semana, para "El Toro" (misma ruta
@@ -20,6 +21,11 @@ import { RoutineWeek } from "@/lib/mock/types";
  * que la semana quede lista para correrse de nuevo; el historial de lo ya
  * hecho queda a salvo, archivado como ejecución, y sigue alimentando
  * "Último entrenamiento" en la pantalla de registro.
+ *
+ * Sprint 6.2 — la tarjeta de resumen se extrajo a `WeekCompletedSummary`
+ * (shared/ui/) para que la pantalla equivalente de Mi Rutina la reutilice.
+ * `getWeek`/`getWeekCompletion`/`resetWeekProgress` ahora reciben
+ * `ROUTINE.id` explícito en vez de depender del default del repositorio.
  */
 export default function SemanaCompletadaPage({ params }: { params: Promise<{ weekId: string }> }) {
   const { weekId } = use(params);
@@ -29,12 +35,12 @@ export default function SemanaCompletadaPage({ params }: { params: Promise<{ wee
   const [completion, setCompletion] = useState<{ completedDays: number; totalDays: number } | null>(null);
 
   useEffect(() => {
-    setWeek(getWeek(weekId) ?? null);
-    setCompletion(getWeekCompletion(weekId));
+    setWeek(getWeek(weekId, ROUTINE.id) ?? null);
+    setCompletion(getWeekCompletion(weekId, ROUTINE.id));
   }, [weekId]);
 
   function handleRestart() {
-    resetWeekProgress(weekId);
+    resetWeekProgress(weekId, ROUTINE.id);
     router.push("/hoy");
   }
 
@@ -63,18 +69,11 @@ export default function SemanaCompletadaPage({ params }: { params: Promise<{ wee
         ← Entreno
       </Link>
 
-      <Card raised className="flex flex-col items-center gap-2 py-10 text-center">
-        <p className="text-3xl">✅</p>
-        <h1 className="text-2xl font-display font-semibold mt-2">Semana completada</h1>
-        <p className="text-text-secondary text-sm">{week.label}</p>
-
-        <p className="text-text-muted text-[11px] uppercase tracking-wide font-display mt-6">
-          Entrenamientos completados
-        </p>
-        <p className="text-3xl font-display font-semibold text-accent-primary">
-          {completion?.completedDays ?? week.days.length} / {completion?.totalDays ?? week.days.length}
-        </p>
-      </Card>
+      <WeekCompletedSummary
+        weekLabel={week.label}
+        completedDays={completion?.completedDays ?? week.days.length}
+        totalDays={completion?.totalDays ?? week.days.length}
+      />
 
       <Button type="button" variant="primary" onClick={handleRestart}>
         🔄 Reiniciar semana

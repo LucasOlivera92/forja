@@ -2,23 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
-import { Card } from "@/shared/ui/Card";
+import { use } from "react";
 import { Button } from "@/shared/ui/Button";
-import { clsx } from "@/shared/utils/clsx";
-import {
-  archiveWeekExecution,
-  compareExerciseToHistory,
-  finishDay,
-  getDayPlan,
-  getDaySession,
-  getExercise,
-  getExerciseHistory,
-  getWeek,
-  getWeekCompletion,
-  updateExerciseSet,
-} from "@/lib/mock/repository";
-import { DaySession, ExerciseHistoryEntry } from "@/lib/mock/types";
+import { WorkoutDayRegister } from "@/shared/ui/WorkoutDayRegister";
+import { archiveWeekExecution, finishDay, getDayPlan, getWeek, getWeekCompletion } from "@/lib/mock/repository";
+import { ROUTINE } from "@/lib/mock/data";
 
 /**
  * Sprint 3.2 — motor de prescripción y registro. Cada ejercicio del día
@@ -36,38 +24,29 @@ import { DaySession, ExerciseHistoryEntry } from "@/lib/mock/types";
  * lee getDashboardSummary() y ya refleja el entrenamiento completado.
  *
  * Sprint 3.9 — historial inmediato: debajo de cada ejercicio se muestra el
- * último entrenamiento registrado (getExerciseHistory(), ya existente en
- * el repositorio) y un indicador ▲/▼/= comparado contra lo que se está
- * tipeando ahora mismo (compareExerciseToHistory(), nueva pero reutiliza
- * exactamente los mismos datos — sin storage nuevo, sin Supabase).
+ * último entrenamiento registrado y un indicador ▲/▼/= comparado contra lo
+ * que se está tipeando ahora mismo — sin storage nuevo, sin Supabase.
  *
  * Sprint 4.3 — si finalizar ESTE día es lo que completa las 5 de la
  * semana, se archiva la semana como una ejecución más
  * (archiveWeekExecution) y se va a la pantalla "Semana completada" en vez
  * de a Hoy. Cualquier otro día sigue yendo a Hoy exactamente igual que
  * antes — no cambia nada del registro en sí.
+ *
+ * Sprint 6.2 — el bloque de ejercicios/registro (inputs de peso/reps,
+ * "último entrenamiento", delta) se extrajo a `WorkoutDayRegister`
+ * (shared/ui/) para que una rutina propia pueda usarlo también. Esta
+ * pantalla le pasa `routineId={ROUTINE.id}` explícito, igual que a
+ * `getDayPlan`/`getWeek`/`getWeekCompletion`/`finishDay`/
+ * `archiveWeekExecution` — ninguna de esas llamadas depende ya del
+ * default del repositorio, aunque el default siga siendo el mismo valor.
+ * El comportamiento visual y funcional de "El Toro" no cambia.
  */
 export default function DiaPage({ params }: { params: Promise<{ weekId: string; dayId: string }> }) {
   const { weekId, dayId } = use(params);
-  const dayPlan = getDayPlan(weekId, dayId);
-  const week = getWeek(weekId);
+  const dayPlan = getDayPlan(weekId, dayId, ROUTINE.id);
+  const week = getWeek(weekId, ROUTINE.id);
   const router = useRouter();
-
-  const [session, setSession] = useState<DaySession | null>(null);
-  const [history, setHistory] = useState<Record<string, ExerciseHistoryEntry | null>>({});
-
-  useEffect(() => {
-    if (!dayPlan) return;
-    setSession(getDaySession(weekId, dayId));
-    setHistory(
-      Object.fromEntries(
-        dayPlan.exercises.map((prescription) => [
-          prescription.exerciseId,
-          getExerciseHistory(prescription.exerciseId, weekId, dayId),
-        ])
-      )
-    );
-  }, [weekId, dayId, dayPlan]);
 
   if (!dayPlan || !week) {
     return (
@@ -81,31 +60,19 @@ export default function DiaPage({ params }: { params: Promise<{ weekId: string; 
   }
 
   /**
-   * Aplica el mismo valor a todas las series prescriptas del ejercicio: el
-   * usuario registra el ejercicio una sola vez, no serie por serie.
-   */
-  function handleField(exerciseId: string, totalSets: number, field: "reps" | "weight", value: string) {
-    const parsed = value === "" ? null : Number(value);
-    const patch = field === "reps" ? { reps: parsed } : { weight: parsed };
-    for (let setNumber = 1; setNumber <= totalSets; setNumber++) {
-      updateExerciseSet(weekId, dayId, exerciseId, setNumber, patch);
-    }
-    setSession(getDaySession(weekId, dayId));
-  }
-
-  /**
    * Guarda la sesión como finalizada. Si con este día se completan las 5
    * de la semana, archiva la ejecución y muestra la pantalla de cierre;
    * si no, vuelve a Hoy exactamente como siempre.
    */
   function handleFinish() {
-    const before = getWeekCompletion(weekId);
-    finishDay(weekId, dayId);
-    const after = getWeekCompletion(weekId);
-    const justCompletedWeek = before.completedDays < before.totalDays && after.completedDays === after.totalDays && after.totalDays > 0;
+    const before = getWeekCompletion(weekId, ROUTINE.id);
+    finishDay(weekId, dayId, ROUTINE.id);
+    const after = getWeekCompletion(weekId, ROUTINE.id);
+    const justCompletedWeek =
+      before.completedDays < before.totalDays && after.completedDays === after.totalDays && after.totalDays > 0;
 
     if (justCompletedWeek) {
-      archiveWeekExecution(weekId);
+      archiveWeekExecution(weekId, ROUTINE.id);
       router.push(`/entreno/${weekId}/completada`);
     } else {
       router.push("/hoy");
@@ -121,105 +88,7 @@ export default function DiaPage({ params }: { params: Promise<{ weekId: string; 
         <h1 className="text-2xl font-display font-semibold mt-1">{dayPlan.name}</h1>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {dayPlan.exercises
-          .slice()
-          .sort((a, b) => a.order - b.order)
-          .map((prescription) => {
-            const exercise = getExercise(prescription.exerciseId);
-            const exerciseLog = session?.exercises.find((ex) => ex.exerciseId === prescription.exerciseId);
-            const registro = exerciseLog?.sets[0];
-            if (!exercise) return null;
-
-            const ultimoEntrenamiento = history[prescription.exerciseId] ?? null;
-            const delta = compareExerciseToHistory(
-              { weight: registro?.weight ?? null, reps: registro?.reps ?? null },
-              ultimoEntrenamiento
-            );
-
-            return (
-              <Card key={prescription.exerciseId}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-text-primary text-sm font-medium">{exercise.name}</p>
-                    <p className="text-text-muted text-xs mt-0.5">
-                      {exercise.muscleGroup} · Objetivo: {prescription.targetSets}×{prescription.targetReps}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="shrink-0 whitespace-nowrap"
-                    onClick={() => window.open(exercise.videoUrl, "_blank", "noopener,noreferrer")}
-                  >
-                    ▶ Ver técnica
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mt-4">
-                  <div>
-                    <label className="text-text-muted text-[11px] uppercase tracking-wide font-display">
-                      Peso utilizado
-                    </label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="Kg"
-                      value={registro?.weight ?? ""}
-                      onChange={(e) => handleField(exercise.id, prescription.targetSets, "weight", e.target.value)}
-                      className="h-11 w-full mt-1 rounded-lg bg-bg-surface-raised border border-border-subtle px-3 text-sm placeholder:text-text-muted"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-text-muted text-[11px] uppercase tracking-wide font-display">
-                      Repeticiones realizadas
-                    </label>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      placeholder="Reps"
-                      value={registro?.reps ?? ""}
-                      onChange={(e) => handleField(exercise.id, prescription.targetSets, "reps", e.target.value)}
-                      className="h-11 w-full mt-1 rounded-lg bg-bg-surface-raised border border-border-subtle px-3 text-sm placeholder:text-text-muted"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-border-subtle">
-                  <p className="text-text-muted text-[11px] uppercase tracking-wide font-display">
-                    Último entrenamiento
-                  </p>
-                  {ultimoEntrenamiento ? (
-                    <>
-                      <p className="text-text-secondary text-sm mt-1">
-                        {ultimoEntrenamiento.weight != null ? `${ultimoEntrenamiento.weight} kg` : "—"} ×{" "}
-                        {ultimoEntrenamiento.reps ?? "—"}
-                      </p>
-                      {delta.kind && (
-                        <p
-                          className={clsx(
-                            "text-xs font-medium mt-1",
-                            delta.kind === "equal" && "text-text-muted",
-                            delta.kind !== "equal" && delta.value > 0 && "text-success",
-                            delta.kind !== "equal" && delta.value < 0 && "text-danger"
-                          )}
-                        >
-                          {delta.kind === "equal"
-                            ? "= Igual que la última vez"
-                            : `${delta.value > 0 ? "▲" : "▼"} ${delta.value > 0 ? "+" : ""}${delta.value} ${
-                                delta.kind === "weight" ? "kg" : "repeticiones"
-                              }`}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-text-muted text-sm mt-1">Aún no hay registros anteriores.</p>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-      </div>
+      <WorkoutDayRegister routineId={ROUTINE.id} weekId={weekId} dayId={dayId} dayPlan={dayPlan} />
 
       <Button type="button" variant="primary" onClick={handleFinish}>
         Finalizar entrenamiento

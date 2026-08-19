@@ -1,17 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
 import { Card } from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
+import { WorkoutDayRegister } from "@/shared/ui/WorkoutDayRegister";
 import {
+  archiveWeekExecution,
   copyExercisesFromDay,
   deleteCustomRoutineExercise,
   duplicateCustomRoutineExercise,
+  finishDay,
   getDayPlan,
   getExercise,
   getRoutine,
   getSuggestedMuscleGroupForRoutine,
+  getWeekCompletion,
   getWeeks,
   moveCustomRoutineExercise,
   updateCustomRoutineExercise,
@@ -42,6 +47,23 @@ import { Routine, RoutineDayPlan, RoutineWeek } from "@/lib/mock/types";
  * crearse, se muestra un subtítulo "Grupo sugerido: {grupo}" debajo del
  * título del día, mientras el día no tenga `displayName` propio (se oculta
  * apenas el usuario lo renombra desde la pantalla de la semana).
+ *
+ * Sprint 6.2 — se agrega el registro real de entrenamiento (peso/reps,
+ * historial, delta) reutilizando `WorkoutDayRegister` (el mismo componente
+ * que usa "El Toro"), más el botón "Finalizar entrenamiento" con la misma
+ * lógica que esa pantalla (getWeekCompletion antes/después → finishDay →
+ * si se completa la semana, archiveWeekExecution y navega a la pantalla de
+ * "Semana completada" de Mi Rutina). Todo esto convive con el editor de
+ * prescripción existente (editar/duplicar/eliminar/reordenar/copiar), que
+ * no se modifica. Cada llamada al repositorio pasa `routineId` (el de
+ * `params`, nunca `ROUTINE.id` de El Toro).
+ *
+ * Nota de alcance (documentado, no corregido — fuera del alcance de este
+ * sprint): `finishDay` sigue disparando `syncHistory()` puertas adentro, y
+ * esa sincronización global (streak, puntero de "Hoy") solo mira la
+ * actividad de El Toro. Entrenar una rutina propia registra y archiva su
+ * progreso correctamente, pero no mueve el streak global ni el día
+ * sugerido en el Dashboard.
  */
 export default function MiRutinaDiaPage({
   params,
@@ -49,6 +71,7 @@ export default function MiRutinaDiaPage({
   params: Promise<{ routineId: string; weekId: string; dayId: string }>;
 }) {
   const { routineId, weekId, dayId } = use(params);
+  const router = useRouter();
   const [dayPlan, setDayPlan] = useState<RoutineDayPlan | null | undefined>(undefined);
   const [weeks, setWeeks] = useState<RoutineWeek[]>([]);
   const [routine, setRoutine] = useState<Routine | null>(null);
@@ -161,6 +184,28 @@ export default function MiRutinaDiaPage({
     setShowCopyPanel(false);
     setCopySourceWeekId(null);
     refresh();
+  }
+
+  /**
+   * Igual que en El Toro: mide el avance de la semana antes y después de
+   * finalizar el día. Si completa la semana, archiva la ejecución y va a
+   * la pantalla de "Semana completada" de Mi Rutina; si no, vuelve a la
+   * lista de días de esta semana (acá no existe un "Hoy" que sepa de
+   * rutinas propias — ver nota de alcance arriba).
+   */
+  function handleFinish() {
+    const before = getWeekCompletion(weekId, routineId);
+    finishDay(weekId, dayId, routineId);
+    const after = getWeekCompletion(weekId, routineId);
+    const justCompletedWeek =
+      before.completedDays < before.totalDays && after.completedDays === after.totalDays && after.totalDays > 0;
+
+    if (justCompletedWeek) {
+      archiveWeekExecution(weekId, routineId);
+      router.push(`/entreno/mi-rutina/${routineId}/${weekId}/completada`);
+    } else {
+      router.push(`/entreno/mi-rutina/${routineId}/${weekId}`);
+    }
   }
 
   const copySourceWeek = weeks.find((week) => week.id === copySourceWeekId) ?? null;
@@ -381,6 +426,20 @@ export default function MiRutinaDiaPage({
           ➕ Agregar ejercicio
         </Button>
       </Link>
+
+      {exercises.length > 0 && (
+        <div className="flex flex-col gap-3 mt-2 pt-4 border-t border-border-subtle">
+          <p className="text-text-muted text-[11px] uppercase tracking-wide font-display">
+            Registrar entrenamiento
+          </p>
+
+          <WorkoutDayRegister routineId={routineId} weekId={weekId} dayId={dayId} dayPlan={dayPlan} />
+
+          <Button type="button" variant="primary" onClick={handleFinish}>
+            Finalizar entrenamiento
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
