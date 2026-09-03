@@ -9,14 +9,19 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from "@/lib/sup
 const DEV_LOG = process.env.NODE_ENV !== "production";
 
 /**
- * Rutas accesibles sin sesión (Sprint 6.0: se suman /registro y
- * /recuperar-password). Sprint 6.3: se suma /nueva-password — el callback
- * puede mandar ahí con `?error=codigo_invalido` cuando el code de recovery
- * está vencido o ya se usó, es decir, SIN sesión todavía. Si no estuviera
- * acá, este bloque redirigía a /login antes de que la pantalla llegara a
- * mostrar ese mensaje específico.
+ * Rutas accesibles sin sesión. /auth/callback debe ser pública porque el
+ * usuario llega allí desde el email todavía sin sesión: el route handler
+ * canjea el código de Supabase y recién entonces crea la sesión. Si el proxy
+ * la bloquea antes, el usuario termina incorrectamente en /login.
  */
-const PUBLIC_AUTH_ROUTES = ["/login", "/registro", "/recuperar-password", "/nueva-password", "/onboarding"];
+const PUBLIC_AUTH_ROUTES = [
+  "/login",
+  "/registro",
+  "/recuperar-password",
+  "/nueva-password",
+  "/auth/callback",
+  "/onboarding",
+];
 
 /** Rutas de "entrada" de las que un usuario YA logueado no tiene sentido que vuelva a pasar. */
 const ENTRY_ROUTES = ["/login", "/registro"];
