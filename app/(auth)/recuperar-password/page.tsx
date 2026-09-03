@@ -31,22 +31,14 @@ export default function RecuperarPasswordPage() {
 
     setLoading(true);
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      // Sprint 6.3: antes apuntaba a /login, que nunca leía el `code` de la
-      // URL — el link de recuperación no llegaba a ningún lado. Ahora usa
-      // el mismo route handler que ya usa /registro para canjear el código
-      // por una sesión real; ese handler distingue recovery de signup y
-      // redirige a /nueva-password en vez de a /hoy.
-      //
-      // Sprint 6.3 (fix): el `?next=recovery` es un marcador propio, no uno
-      // que Supabase agregue solo. La auditoría con test real confirmó que
-      // el `type=recovery` que en teoría reenvía Supabase junto al `code`
-      // no llegaba a /auth/callback en este proyecto (el usuario terminaba
-      // en /hoy como si fuera un login normal). Como `redirectTo` es una
-      // URL que nosotros controlamos por completo, Supabase la usa tal
-      // cual como base y le agrega `code=...` — no toca los query params
-      // que ya trae. Así, `next=recovery` sí llega garantizado.
-      redirectTo:
-        typeof window !== "undefined" ? `${window.location.origin}/auth/callback?next=recovery` : undefined,
+      // Sprint 6.3 (refactor definitivo): el recovery ya NO pasa por
+      // /auth/callback. Los intentos anteriores de distinguir recovery de
+      // signup en un callback compartido (vía `type` que en teoría manda
+      // Supabase, después vía un `?next=recovery` propio) demostraron ser
+      // fuente de fricción en producción. Ahora el link de recovery apunta
+      // directo a /nueva-password, que es la única pantalla responsable de
+      // canjear el `code` por una sesión — sin ambigüedad de flujo posible.
+      redirectTo: typeof window !== "undefined" ? `${window.location.origin}/nueva-password` : undefined,
     });
 
     if (process.env.NODE_ENV !== "production") {

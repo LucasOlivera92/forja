@@ -18,61 +18,97 @@ function traducirErrorNuevaPassword(message: string): string {
 }
 
 /**
- * Sprint 6.3 — pantalla de "nueva contraseña", último paso del flujo de
- * recuperación: /recuperar-password → email → /auth/callback (canjea el
- * código y detecta `type=recovery`) → esta pantalla, ya con la sesión de
- * recovery guardada en cookies por el propio callback.
+ * Sprint 6.3 (refactor definitivo) — esta pantalla es ahora el punto
+ * COMPLETO del flujo de recuperación, sin pasar por /auth/callback:
  *
- * Esta pantalla NUNCA maneja tokens por su cuenta: usa exactamente la
- * sesión que ya dejó `exchangeCodeForSession` en el callback (mismo
- * cliente de `lib/supabase/client`, que lee las cookies de Supabase como
- * cualquier otra pantalla). Si no hay sesión (link vencido, ya usado, o se
- * entra acá directo sin pasar por el callback), se lo dice claro al
- * usuario y lo manda a pedir la recuperación de nuevo — no se implementa
- * ningún sistema paralelo de verificación.
+ * /recuperar-password → resetPasswordForEmail(redirectTo: .../nueva-password)
+ * → email → click → llega ACÁ con `?code=...` en la URL.
+ *
+ * Al montar: si hay `code`, esta pantalla misma hace
+ * `exchangeCodeForSession(code)` — el mismo canje que antes hacía el
+ * route handler compartido. Recién con esa sesión de recovery ya
+ * confirmada se muestra el formulario. Si no hay `code` en la URL (por
+ * ejemplo, si alguien vuelve a entrar a esta pantalla más tarde con la
+ * sesión de recovery todavía viva de una carga anterior), se revisa si ya
+ * existe una sesión válida antes de mostrar el formulario. En cualquier
+ * otro caso (code inválido/vencido, o ni code ni sesión) se explica que el
+ * enlace ya no sirve y hay que pedir uno nuevo.
+ *
+ * No se maneja ningún token por fuera de la sesión de Supabase: todo pasa
+ * por `supabase.auth` (`exchangeCodeForSession`, `getUser`, `updateUser`,
+ * `signOut`), nunca se guarda nada en localStorage ni se expone la
+ * contraseña en la URL.
  */
 export default function NuevaPasswordPage() {
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [hasSession, setHasSession] = useState(false);
-  // Se lee con window.location en vez de useSearchParams (que en el App
-  // Router obliga a envolver la página en <Suspense>) para no agregar esa
-  // pieza extra a una pantalla que ya necesita su propio chequeo de sesión
-  // en useEffect — mismo patrón que ya usa el resto de app/(auth)/*.
-  const [callbackError, setCallbackError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [ready, setReady] = useState(false);
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setCallbackError(new URLSearchParams(window.location.search).get("error"));
-    }
+    let active = true;
 
-    const supabase = createClient();
-    if (!supabase) {
-      setCheckingSession(false);
+    const supabaseClient = createClient();
+
+    if (!supabaseClient) {
+      setChecking(false);
       return;
     }
 
-    supabase.auth.getUser().then(({ data }) => {
-      setHasSession(Boolean(data.user));
-      setCheckingSession(false);
-    });
+    const supabase = supabaseClient;
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!active) return;
+
+        if (event === "PASSWORD_RECOVERY" && session) {
+          setReady(true);
+          setChecking(false);
+          return;
+        }
+
+        if (event === "SIGNED_IN" && session) {
+          setReady(true);
+          setChecking(false);
+        }
+      }
+    );
+
+    async function resolveRecoverySession() {
+      const { data } = await supabase.auth.getSession();
+
+      if (!active) return;
+
+      setReady(Boolean(data.session));
+      setChecking(false);
+    }
+
+    resolveRecoverySession();
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden.");
+    if (!password || !confirmPassword) {
+      setError("Completá los dos campos.");
       return;
     }
     if (password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
       return;
     }
 
@@ -82,7 +118,7 @@ export default function NuevaPasswordPage() {
       return;
     }
 
-    setLoading(true);
+    setSaving(true);
     const { error: updateError } = await supabase.auth.updateUser({ password });
 
     if (process.env.NODE_ENV !== "production") {
@@ -90,7 +126,7 @@ export default function NuevaPasswordPage() {
     }
 
     if (updateError) {
-      setLoading(false);
+      setSaving(false);
       setError(traducirErrorNuevaPassword(updateError.message));
       return; // los campos no se limpian
     }
@@ -100,11 +136,11 @@ export default function NuevaPasswordPage() {
     // contraseña nueva, desde /login.
     await supabase.auth.signOut();
 
-    setLoading(false);
+    setSaving(false);
     setDone(true);
   }
 
-  if (checkingSession) {
+  if (checking) {
     return (
       <div className="flex flex-col gap-6 text-center">
         <h1 className="text-3xl font-display font-bold text-accent-primary">FORJA</h1>
@@ -117,9 +153,7 @@ export default function NuevaPasswordPage() {
     return (
       <div className="flex flex-col gap-6 text-center">
         <h1 className="text-3xl font-display font-bold text-accent-primary">FORJA</h1>
-        <p className="text-text-primary text-sm leading-relaxed">
-          Listo, tu contraseña se actualizó. Iniciá sesión con la contraseña nueva.
-        </p>
+        <p className="text-text-primary text-sm leading-relaxed">Listo, tu contraseña se actualizó.</p>
         <Link href="/login" className="text-accent-primary text-sm underline">
           Ir a iniciar sesión
         </Link>
@@ -127,15 +161,12 @@ export default function NuevaPasswordPage() {
     );
   }
 
-  if (!hasSession) {
+  if (!ready) {
     return (
       <div className="flex flex-col gap-6 text-center">
         <h1 className="text-3xl font-display font-bold text-accent-primary">FORJA</h1>
         <p className="text-text-primary text-sm leading-relaxed">
-          {callbackError
-            ? "Este enlace de recuperación ya no es válido."
-            : "Tu enlace de recuperación venció o ya fue usado."}{" "}
-          Pedí uno nuevo para poder cambiar tu contraseña.
+          El enlace de recuperación es inválido o venció. Pedí uno nuevo para poder cambiar tu contraseña.
         </p>
         <Link href="/recuperar-password" className="text-accent-primary text-sm underline">
           Solicitar recuperación de nuevo
@@ -154,21 +185,21 @@ export default function NuevaPasswordPage() {
       <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
         <input
           type="password"
-          placeholder="Contraseña nueva"
+          placeholder="Nueva contraseña"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           className="h-[52px] rounded-xl bg-bg-surface border border-border-subtle px-4 text-sm placeholder:text-text-muted"
-          disabled={!isSupabaseConfigured || loading}
+          disabled={!isSupabaseConfigured || saving}
           autoComplete="new-password"
           required
         />
         <input
           type="password"
-          placeholder="Confirmar contraseña nueva"
+          placeholder="Repetir nueva contraseña"
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
           className="h-[52px] rounded-xl bg-bg-surface border border-border-subtle px-4 text-sm placeholder:text-text-muted"
-          disabled={!isSupabaseConfigured || loading}
+          disabled={!isSupabaseConfigured || saving}
           autoComplete="new-password"
           required
         />
@@ -179,8 +210,8 @@ export default function NuevaPasswordPage() {
           </p>
         )}
 
-        <Button type="submit" disabled={!isSupabaseConfigured || loading}>
-          {loading ? "Guardando..." : "Guardar contraseña nueva"}
+        <Button type="submit" disabled={!isSupabaseConfigured || saving}>
+          {saving ? "Guardando..." : "Guardar contraseña nueva"}
         </Button>
       </form>
     </div>
