@@ -6,87 +6,108 @@ import { Button } from "@/shared/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import { importMissingCurrentUserRoutines } from "@/lib/cloud/routines-import";
 import type { RoutineImportReport } from "@/lib/cloud/routines-import";
+import { listRoutinesForAthlete } from "@/lib/cloud/routines";
+import { mergeCloudRoutinesIntoLocal } from "@/lib/mock/repository";
 
 interface RoutineCloudBackupProps {
-  customRoutineCount: number;
+  /** Se llama únicamente si la sincronización descargó al menos una rutina nueva — así Entreno refresca su lista sin sondear nada por su cuenta. */
+  onRoutinesDownloaded: () => void;
 }
 
-function pluralizeRoutinesGuardadas(count: number): string {
-  return count === 1 ? "rutina guardada" : "rutinas guardadas";
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
 }
 
 /**
- * Arma el mensaje final a partir del informe de `importMissingCurrentUserRoutines`
- * (created/identical/conflicts/archived/invalid/failed). Una misma corrida
- * puede combinar creadas con problemas a la vez (por ejemplo, 2 nuevas y 1
- * en conflicto) — por eso las partes se arman por separado y se unen, en
- * vez de asumir que solo pasa una cosa por corrida.
+ * Arma el mensaje final combinando lo que subió `importMissingCurrentUserRoutines`
+ * (created/identical/conflicts/archived/invalid/failed) con lo que bajó
+ * `mergeCloudRoutinesIntoLocal` (added/skipped). Una misma corrida puede
+ * subir, bajar, y tener problemas a la vez — por eso cada parte se arma
+ * por separado y se concatenan, en vez de asumir que solo pasa una cosa.
  */
-function buildReportMessage(report: RoutineImportReport): string {
-  const problems = report.conflicts + report.archived + report.invalid + report.failed;
+function buildSyncMessage(uploadReport: RoutineImportReport, downloaded: { added: number; skipped: number }): string {
+  const problems = uploadReport.conflicts + uploadReport.archived + uploadReport.invalid + uploadReport.failed;
   const parts: string[] = [];
 
-  if (report.created > 0) {
-    parts.push(`${report.created} ${pluralizeRoutinesGuardadas(report.created)} correctamente.`);
+  if (uploadReport.created > 0) {
+    parts.push(`${uploadReport.created} ${pluralize(uploadReport.created, "rutina subida", "rutinas subidas")}.`);
+  }
+
+  if (downloaded.added > 0) {
+    parts.push(`${downloaded.added} ${pluralize(downloaded.added, "rutina descargada", "rutinas descargadas")}.`);
   }
 
   if (problems > 0) {
     const details: string[] = [];
-    if (report.conflicts > 0) details.push(`${report.conflicts} con conflicto`);
-    if (report.archived > 0) details.push(`${report.archived} archivada${report.archived === 1 ? "" : "s"}`);
-    if (report.invalid > 0) details.push(`${report.invalid} inválida${report.invalid === 1 ? "" : "s"}`);
-    if (report.failed > 0) details.push(`${report.failed} con error`);
+    if (uploadReport.conflicts > 0) details.push(`${uploadReport.conflicts} con conflicto`);
+    if (uploadReport.archived > 0) {
+      details.push(`${uploadReport.archived} archivada${uploadReport.archived === 1 ? "" : "s"}`);
+    }
+    if (uploadReport.invalid > 0) {
+      details.push(`${uploadReport.invalid} inválida${uploadReport.invalid === 1 ? "" : "s"}`);
+    }
+    if (uploadReport.failed > 0) details.push(`${uploadReport.failed} con error`);
     parts.push(`${details.join(", ")}. No se sobrescribió ningún dato.`);
   }
 
   if (parts.length === 0) {
-    parts.push("Tus rutinas ya estaban guardadas.");
+    parts.push("Tus rutinas ya estaban sincronizadas.");
   }
 
   return parts.join(" ");
 }
 
 /**
- * Sprint 6.8 — Tarjeta visible y manual para guardar rutinas propias en
- * Supabase. Usa exclusivamente lo que ya existe y está aprobado:
- * `createClient()` (lib/supabase/client.ts — siempre la anon key + la
- * sesión del usuario, nunca service_role) e `importMissingCurrentUserRoutines()`
- * (lib/cloud/routines-import.ts, que resuelve y verifica el usuario
- * autenticado internamente — este componente nunca le pasa ni le inventa
- * un id de usuario). No lee ni escribe `localStorage` directamente: eso
- * lo hace, puertas adentro, el importador.
+ * Sprint 6.9 — Sincronización manual en AMBAS direcciones. Reutiliza
+ * exclusivamente piezas ya existentes y aprobadas, sin ningún mecanismo
+ * nuevo de identidad ni de almacenamiento:
  *
- * El guardado NUNCA es automático: no hay ningún `useEffect` acá, ni nada
- * que se dispare al montar la pantalla o al importar este módulo — el
- * único disparador es el click del botón.
+ * 1. Sube (`importMissingCurrentUserRoutines`, lib/cloud/routines-import.ts)
+ *    — resuelve y verifica el usuario autenticado internamente; este
+ *    componente nunca le pasa ni le inventa un id de usuario.
+ * 2. Lee las rutinas activas ya en Supabase para ese mismo usuario
+ *    (`listRoutinesForAthlete(supabase, report.userId)`).
+ * 3. Baja lo que falte localmente (`mergeCloudRoutinesIntoLocal`,
+ *    lib/mock/repository.ts) — nunca sobrescribe una rutina local ni
+ *    escribe si no hay nada nuevo, y respeta el namespace por usuario de
+ *    siempre (mismo `readJSON`/`writeJSON` de toda la vida).
+ *
+ * Todo dentro del mismo click: no hay ningún `useEffect` acá, ni nada que
+ * se dispare al montar la pantalla o al importar este módulo — el único
+ * disparador es el botón.
  */
-export function RoutineCloudBackup({ customRoutineCount }: RoutineCloudBackupProps) {
-  const [saving, setSaving] = useState(false);
+export function RoutineCloudBackup({ onRoutinesDownloaded }: RoutineCloudBackupProps) {
+  const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  if (customRoutineCount === 0) return null;
-
-  async function handleSave() {
-    setSaving(true);
+  async function handleSync() {
+    setSyncing(true);
     setMessage(null);
 
     const supabase = createClient();
     if (!supabase) {
       setMessage("No se pudo conectar con la nube. Probá de nuevo más tarde.");
-      setSaving(false);
+      setSyncing(false);
       return;
     }
 
     try {
-      const report = await importMissingCurrentUserRoutines(supabase);
-      setMessage(buildReportMessage(report));
+      const uploadReport = await importMissingCurrentUserRoutines(supabase);
+      const remoteRows = await listRoutinesForAthlete(supabase, uploadReport.userId);
+      const downloaded = mergeCloudRoutinesIntoLocal(remoteRows.map((row) => row.payload));
+
+      setMessage(buildSyncMessage(uploadReport, downloaded));
+
+      if (downloaded.added > 0) {
+        onRoutinesDownloaded();
+      }
     } catch {
       // A propósito no se muestra error.message, códigos ni el objeto que
       // haya devuelto Supabase: podrían traer detalles internos. El
-      // usuario solo necesita saber que no se guardó y que puede reintentar.
-      setMessage("No se pudieron guardar tus rutinas. Probá de nuevo más tarde.");
+      // usuario solo necesita saber que no se sincronizó y que puede reintentar.
+      setMessage("No se pudo sincronizar tus rutinas. Probá de nuevo más tarde.");
     } finally {
-      setSaving(false);
+      setSyncing(false);
     }
   }
 
@@ -98,8 +119,8 @@ export function RoutineCloudBackup({ customRoutineCount }: RoutineCloudBackupPro
       </p>
 
       <div className="mt-4">
-        <Button type="button" variant="secondary" onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando..." : "Guardar rutinas"}
+        <Button type="button" variant="secondary" onClick={handleSync} disabled={syncing}>
+          {syncing ? "Sincronizando..." : "Sincronizar rutinas"}
         </Button>
       </div>
 

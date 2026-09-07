@@ -123,7 +123,7 @@ export default function EntrenoPage() {
         </Button>
       </Link>
 
-      <RoutineCloudBackup customRoutineCount={(routines ?? []).filter((r) => !isBaseRoutine(r.id)).length} />
+      <RoutineCloudBackup onRoutinesDownloaded={refresh} />
 
       <div className="flex flex-col gap-3">
         {(routines ?? []).map((routine) => {

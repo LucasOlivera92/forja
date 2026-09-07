@@ -252,6 +252,53 @@ export function getCustomRoutinesSnapshot(): unknown {
 }
 
 /**
+ * Sprint 6.9 — Mitad "descargar" de la sincronización manual en ambas
+ * direcciones (la mitad "subir" ya la cubre `lib/cloud/routines-import.ts`
+ * en el sentido contrario). Recibe rutinas que YA pasaron por la
+ * validación del adaptador cloud (`isRoutinePayload`, en
+ * `lib/cloud/routines.ts`) — acá no se vuelve a validar la forma, solo se
+ * decide cuáles de esas rutinas hace falta agregar a este dispositivo.
+ *
+ * Reglas, todas cumplidas por construcción:
+ * - Ignora cualquier rutina cuyo id sea una rutina BASE (`isBaseRoutine`)
+ *   — "El Toro"/los stubs de data.ts nunca se tocan ni se duplican.
+ * - Ignora cualquier id que ya exista entre las rutinas propias locales
+ *   — nunca sobrescribe una rutina local con la versión de la nube.
+ * - Si `cloudRoutines` trae el mismo id repetido más de una vez, solo la
+ *   primera aparición se toma como candidata — nunca se agrega dos veces
+ *   en la misma llamada.
+ * - Escribe `localStorage` una sola vez (mismo `writeJSON`/namespace por
+ *   usuario de siempre, sin ningún mecanismo nuevo), y solo si hay algo
+ *   nuevo para agregar — si todo se omite, no se toca `localStorage`.
+ *
+ * Es aditiva: no reemplaza ni modifica `getCustomRoutines`,
+ * `createRoutine` ni ninguna otra función existente.
+ */
+export function mergeCloudRoutinesIntoLocal(cloudRoutines: Routine[]): { added: number; skipped: number } {
+  const existing = getCustomRoutines();
+  const existingIds = new Set(existing.map((routine) => routine.id));
+  const seenInThisBatch = new Set<string>();
+
+  const toAdd: Routine[] = [];
+  let skipped = 0;
+
+  for (const routine of cloudRoutines) {
+    if (isBaseRoutine(routine.id) || existingIds.has(routine.id) || seenInThisBatch.has(routine.id)) {
+      skipped += 1;
+      continue;
+    }
+    seenInThisBatch.add(routine.id);
+    toAdd.push(routine);
+  }
+
+  if (toAdd.length > 0) {
+    writeJSON(CUSTOM_ROUTINES_KEY, [...existing, ...toAdd]);
+  }
+
+  return { added: toAdd.length, skipped };
+}
+
+/**
  * Sprint 4.6 — Igual que `buildEmptyWeeks` (mismos ids `semana-N`/`dia-N`,
  * sin ejercicios), pero aplicando los nombres sugeridos de una plantilla
  * como `displayName` de semana y día (Sprint 4.4 — campo aditivo, con
