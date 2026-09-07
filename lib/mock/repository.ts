@@ -243,6 +243,15 @@ function getCustomRoutines(): Routine[] {
 }
 
 /**
+ * Devuelve una foto de las rutinas locales sin escribir ni migrar datos.
+ * El tipo es `unknown` a propósito: el importador cloud debe validar todo
+ * lo que haya en localStorage antes de enviarlo a Supabase.
+ */
+export function getCustomRoutinesSnapshot(): unknown {
+  return readJSON<unknown>(CUSTOM_ROUTINES_KEY, []);
+}
+
+/**
  * Sprint 4.6 — Igual que `buildEmptyWeeks` (mismos ids `semana-N`/`dia-N`,
  * sin ejercicios), pero aplicando los nombres sugeridos de una plantilla
  * como `displayName` de semana y día (Sprint 4.4 — campo aditivo, con
