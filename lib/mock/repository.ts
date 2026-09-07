@@ -299,6 +299,43 @@ export function mergeCloudRoutinesIntoLocal(cloudRoutines: Routine[]): { added: 
 }
 
 /**
+ * Sprint 6.11 — Mitad "usar versión de la nube" de la resolución manual de
+ * conflictos (la mitad "usar este dispositivo" no toca localStorage: pisa
+ * directamente la fila de Supabase vía `updateRoutinePayload`, en
+ * `lib/cloud/routines.ts`). Recibe una `Routine` que YA pasó por la
+ * validación del adaptador cloud (`isRoutinePayload`) — acá no se vuelve a
+ * validar la forma, solo se decide si corresponde reemplazar.
+ *
+ * Reglas, todas cumplidas por construcción:
+ * - Rechaza rutinas BASE (`isBaseRoutine`) — "El Toro"/los stubs de data.ts
+ *   nunca se reemplazan ni se tratan como una rutina propia.
+ * - Busca la rutina local por `routine.id`; si no existe ninguna con ese
+ *   id, no crea una nueva — devuelve `false` sin tocar `localStorage`
+ *   (evita que resolver un conflicto viejo resucite una rutina que el
+ *   usuario ya borró de este dispositivo).
+ * - Si existe, la reemplaza EN SU MISMA POSICIÓN del array (no la manda al
+ *   final), para no alterar el orden en que se ve el resto de las rutinas
+ *   propias en /entreno.
+ * - Escribe `localStorage` una sola vez (mismo `writeJSON`/namespace por
+ *   usuario de siempre), y solo si efectivamente hubo un reemplazo.
+ *
+ * Es aditiva: no reemplaza ni modifica `getCustomRoutines`, `createRoutine`
+ * ni `mergeCloudRoutinesIntoLocal`.
+ */
+export function replaceCustomRoutineWithCloudVersion(routine: Routine): boolean {
+  if (isBaseRoutine(routine.id)) return false;
+
+  const existing = getCustomRoutines();
+  const index = existing.findIndex((r) => r.id === routine.id);
+  if (index === -1) return false;
+
+  const nextCustomRoutines = [...existing];
+  nextCustomRoutines[index] = routine;
+  writeJSON(CUSTOM_ROUTINES_KEY, nextCustomRoutines);
+  return true;
+}
+
+/**
  * Sprint 4.6 — Igual que `buildEmptyWeeks` (mismos ids `semana-N`/`dia-N`,
  * sin ejercicios), pero aplicando los nombres sugeridos de una plantilla
  * como `displayName` de semana y día (Sprint 4.4 — campo aditivo, con
