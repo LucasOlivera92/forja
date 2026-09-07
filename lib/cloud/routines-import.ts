@@ -69,6 +69,15 @@ export interface RoutineImportReport {
   items: RoutineImportResultItem[];
 }
 
+type ValidatedLocalRoutine =
+  | { index: number; routine: Routine }
+  | {
+      index: number;
+      localId: string | null;
+      status: "invalid";
+      message: string;
+    };
+
 export class RoutineImportSessionError extends RoutineAdapterError {
   constructor(message: string, cause?: unknown) {
     super(message, cause);
@@ -224,7 +233,7 @@ export async function planCurrentUserRoutineImport(
     );
   }
 
-  const validated = snapshot.map((value, index) => {
+  const validated: ValidatedLocalRoutine[] = snapshot.map((value, index) => {
     if (!isRoutinePayload(value)) {
       return {
         index,
