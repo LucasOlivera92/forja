@@ -8,6 +8,8 @@ import { Button } from "@/shared/ui/Button";
 import { clsx } from "@/shared/utils/clsx";
 import { createRoutine, getRoutineSplits, getRoutineTemplates } from "@/lib/mock/repository";
 import { RoutineSplitCategory, RoutineTemplate } from "@/lib/mock/types";
+import { createClient } from "@/lib/supabase/client";
+import { importMissingCurrentUserRoutines } from "@/lib/cloud/routines-import";
 
 type CreationMode = "cero" | "plantilla";
 
@@ -64,6 +66,9 @@ export default function NuevaRutinaPage() {
   const [daysPerWeek, setDaysPerWeek] = useState("5");
   const [splitCategory, setSplitCategory] = useState<RoutineSplitCategory | null>(null);
 
+  const [saving, setSaving] = useState(false);
+  const [cloudSaveIssue, setCloudSaveIssue] = useState(false);
+
   const canSave = name.trim().length > 0;
   const daysNum = Math.max(1, Number(daysPerWeek) || 0);
   const suggestedDistribution = splitCategory ? (splits[splitCategory]?.[daysNum] ?? null) : null;
@@ -86,8 +91,22 @@ export default function NuevaRutinaPage() {
     setDayNames(template.dayNames);
   }
 
-  function handleSave() {
-    if (!canSave) return;
+  /**
+   * Sprint 6.10 — Guardado local inmediato + subida automática, sin
+   * necesitar "Sincronizar rutinas" después. El guardado local
+   * (`createRoutine`) se llama EXACTAMENTE UNA VEZ, siempre primero y
+   * siempre sin condiciones — si Supabase falla o no hay cliente
+   * configurado, la rutina ya quedó a salvo en este dispositivo y nunca
+   * se revierte ni se vuelve a crear. `saving` bloquea el botón mientras
+   * trabaja (evita doble click) y, ante un problema de nube, el botón
+   * "Guardar" deja de existir en el render (se reemplaza por el aviso +
+   * "Ir a Entreno") — así no hay forma de volver a disparar `handleSave`
+   * desde esta pantalla y duplicar la rutina local.
+   */
+  async function handleSave() {
+    if (!canSave || saving) return;
+    setSaving(true);
+
     const weeksNum = Math.max(1, Number(weeksCount) || 0);
     const daysNum = Math.max(1, Number(daysPerWeek) || 0);
     // Si el usuario tocó semanas/días después de elegir la plantilla, los
@@ -105,7 +124,24 @@ export default function NuevaRutinaPage() {
       dayNames: templateStillValid ? (dayNames as string[]) : undefined,
       splitCategory: splitCategory ?? undefined,
     });
-    router.push("/entreno");
+
+    const supabase = createClient();
+    if (!supabase) {
+      setSaving(false);
+      setCloudSaveIssue(true);
+      return;
+    }
+
+    try {
+      await importMissingCurrentUserRoutines(supabase);
+      router.push("/entreno");
+    } catch {
+      // A propósito no se muestra el error real (podría traer detalles
+      // internos de Supabase) — la rutina local ya está guardada, así que
+      // esto nunca es una falla que haya que revertir, solo informar.
+      setSaving(false);
+      setCloudSaveIssue(true);
+    }
   }
 
   return (
@@ -268,9 +304,22 @@ export default function NuevaRutinaPage() {
         </div>
       </Card>
 
-      <Button type="button" variant="primary" disabled={!canSave} onClick={handleSave}>
-        Guardar
-      </Button>
+      {cloudSaveIssue ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-text-secondary text-sm">
+            La rutina se creó en este dispositivo, pero todavía no se guardó en la nube.
+          </p>
+          <Link href="/entreno">
+            <Button type="button" variant="secondary">
+              Ir a Entreno
+            </Button>
+          </Link>
+        </div>
+      ) : (
+        <Button type="button" variant="primary" disabled={!canSave || saving} onClick={handleSave}>
+          {saving ? "Guardando..." : "Guardar"}
+        </Button>
+      )}
     </div>
   );
 }
