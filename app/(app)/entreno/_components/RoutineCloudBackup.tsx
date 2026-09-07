@@ -103,6 +103,7 @@ export function RoutineCloudBackup({ onRoutinesDownloaded }: RoutineCloudBackupP
   async function handleSync() {
     setSyncing(true);
     setMessage(null);
+    setResolutionMessage(null);
 
     const supabase = createClient();
     if (!supabase) {
@@ -137,9 +138,11 @@ export function RoutineCloudBackup({ onRoutinesDownloaded }: RoutineCloudBackupP
           }
           setConflicts(nextConflicts);
         } catch {
-          // No se pudo armar el detalle de los conflictos (el resumen de
-          // arriba ya informó la cantidad) — no se expone el error interno,
-          // y la lista de conflictos anterior se conserva tal cual.
+          // No se pudo armar el detalle actualizado de los conflictos (el
+          // resumen de arriba ya informó la cantidad) — no se expone el
+          // error interno. Se limpia la lista anterior en vez de dejarla
+          // desactualizada: sus botones estarían operando sobre datos viejos.
+          setConflicts([]);
         }
       } else {
         setConflicts([]);
@@ -179,6 +182,9 @@ export function RoutineCloudBackup({ onRoutinesDownloaded }: RoutineCloudBackupP
     try {
       await updateRoutinePayload(supabase, conflict.cloudRow.id, conflict.cloudRow.version, conflict.localRoutine);
       removeConflict(conflict.localId);
+      // Limpia el resumen de la sincronización: podía seguir diciendo "con
+      // conflicto" para esta misma rutina, que ya se resolvió.
+      setMessage(null);
       setResolutionMessage(`Se guardó en la nube la versión de este dispositivo de "${conflict.localRoutine.name}".`);
       onRoutinesDownloaded();
     } catch (error) {
@@ -197,11 +203,19 @@ export function RoutineCloudBackup({ onRoutinesDownloaded }: RoutineCloudBackupP
     }
   }
 
-  /** "Usar versión de la nube": pisa la rutina local (localStorage) con la versión de Supabase. No hace ninguna llamada a Supabase. */
-  function handleUseCloudVersion(conflict: RoutineConflict) {
-    const cloudName = conflict.cloudRow.payload.name;
+  /**
+   * "Usar versión de la nube": pisa la rutina local (localStorage) con la
+   * versión de Supabase. A propósito NO usa `conflict.cloudRow` tal como se
+   * leyó cuando se armó la lista de conflictos (podría estar desactualizado
+   * si algo cambió entre medio) — antes de escribir nada vuelve a consultar
+   * el estado actual con `planCurrentUserRoutineImport` y solo usa el
+   * `cloudRow.payload` recién leído. Si esa rutina ya no existe, ya no está
+   * en conflicto (identical/missing/archived/invalid) o no se puede
+   * verificar, no reemplaza nada y pide volver a sincronizar.
+   */
+  async function handleUseCloudVersion(conflict: RoutineConflict) {
     const confirmed = window.confirm(
-      `Vas a reemplazar, en este dispositivo, la rutina "${cloudName}" por la versión guardada en la nube.\n\n` +
+      `Vas a reemplazar, en este dispositivo, la rutina "${conflict.localRoutine.name}" por la versión guardada en la nube.\n\n` +
         "Se va a perder el contenido que tenías en este dispositivo para esta rutina. Esta acción no se puede deshacer."
     );
     if (!confirmed) return;
@@ -209,20 +223,45 @@ export function RoutineCloudBackup({ onRoutinesDownloaded }: RoutineCloudBackupP
     setResolvingLocalId(conflict.localId);
     setResolutionMessage(null);
 
-    const replaced = replaceCustomRoutineWithCloudVersion(conflict.cloudRow.payload);
-
-    if (replaced) {
-      removeConflict(conflict.localId);
-      setResolutionMessage(`Se guardó en este dispositivo la versión de la nube de "${cloudName}".`);
-      onRoutinesDownloaded();
-    } else {
-      setResolutionMessage(
-        `No se pudo aplicar la versión de la nube de "${cloudName}": ya no está entre tus rutinas de este dispositivo.`
-      );
-      removeConflict(conflict.localId);
+    const supabase = createClient();
+    if (!supabase) {
+      setResolutionMessage("No se pudo conectar con la nube. Probá de nuevo más tarde.");
+      setResolvingLocalId(null);
+      return;
     }
 
-    setResolvingLocalId(null);
+    try {
+      const plan = await planCurrentUserRoutineImport(supabase);
+      const current = plan.items.find((item) => item.localId === conflict.localId);
+
+      if (!current || current.status !== "conflict" || !current.cloudRow) {
+        setResolutionMessage(
+          `El estado de "${conflict.localRoutine.name}" cambió mientras tanto. Volvé a sincronizar para verlo actualizado.`
+        );
+        return;
+      }
+
+      const freshPayload = current.cloudRow.payload;
+      const replaced = replaceCustomRoutineWithCloudVersion(freshPayload);
+
+      if (replaced) {
+        removeConflict(conflict.localId);
+        setMessage(null);
+        setResolutionMessage(`Se guardó en este dispositivo la versión de la nube de "${freshPayload.name}".`);
+        onRoutinesDownloaded();
+      } else {
+        removeConflict(conflict.localId);
+        setResolutionMessage(
+          `No se pudo aplicar la versión de la nube de "${freshPayload.name}": ya no está entre tus rutinas de este dispositivo.`
+        );
+      }
+    } catch {
+      setResolutionMessage(
+        `No se pudo verificar el estado actual de "${conflict.localRoutine.name}" en la nube. Probá de nuevo más tarde.`
+      );
+    } finally {
+      setResolvingLocalId(null);
+    }
   }
 
   return (
@@ -277,12 +316,12 @@ export function RoutineCloudBackup({ onRoutinesDownloaded }: RoutineCloudBackupP
               </div>
             );
           })}
-
-          <p aria-live="polite" className="text-text-secondary text-sm min-h-[1.25rem]">
-            {resolutionMessage}
-          </p>
         </div>
       )}
+
+      <p aria-live="polite" className="text-text-secondary text-sm mt-2 min-h-[1.25rem]">
+        {resolutionMessage}
+      </p>
     </Card>
   );
 }
