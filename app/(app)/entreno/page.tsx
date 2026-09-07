@@ -12,6 +12,7 @@ import {
   renameCustomRoutine,
 } from "@/lib/mock/repository";
 import { Routine } from "@/lib/mock/types";
+import { RoutineCloudBackup } from "./_components/RoutineCloudBackup";
 
 /**
  * Sprint 3.5 — Entreno unificado: la raíz de /entreno ahora es el catálogo
@@ -121,6 +122,8 @@ export default function EntrenoPage() {
           ➕ Crear rutina
         </Button>
       </Link>
+
+      <RoutineCloudBackup customRoutineCount={(routines ?? []).filter((r) => !isBaseRoutine(r.id)).length} />
 
       <div className="flex flex-col gap-3">
         {(routines ?? []).map((routine) => {
