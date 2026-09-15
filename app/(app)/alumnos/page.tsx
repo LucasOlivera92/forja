@@ -5,6 +5,8 @@ import { Button } from "@/shared/ui/Button";
 import { getCurrentProfile, isCoach } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { listActiveStudentsForCurrentCoach } from "@/lib/cloud/coach-students";
+import { getCurrentCoachReferralCode } from "@/lib/cloud/coach-referrals";
+import { CoachReferralCard } from "./_components/CoachReferralCard";
 
 /**
  * Sprint 6.12 — "Mis alumnos": panel real (Supabase) para coaches, de solo
@@ -37,6 +39,7 @@ export default async function AlumnosPage() {
 
   let students: Awaited<ReturnType<typeof listActiveStudentsForCurrentCoach>> = [];
   let loadFailed = false;
+  let referralCode: string | null = null;
 
   try {
     students = await listActiveStudentsForCurrentCoach(supabase);
@@ -46,9 +49,18 @@ export default async function AlumnosPage() {
     loadFailed = true;
   }
 
+  try {
+    referralCode = await getCurrentCoachReferralCode(supabase);
+  } catch {
+    // La lista de alumnos sigue siendo utilizable aunque temporalmente no
+    // se pueda leer el código de invitación.
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-display font-semibold">MIS ALUMNOS</h1>
+
+      {referralCode && <CoachReferralCard code={referralCode} />}
 
       {loadFailed ? (
         <Card>

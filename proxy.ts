@@ -5,6 +5,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from "@/lib/supabase/env";
+import { claimReferralFromUserMetadata } from "@/lib/cloud/coach-referrals";
 
 const DEV_LOG = process.env.NODE_ENV !== "production";
 
@@ -107,6 +108,8 @@ export async function proxy(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle();
 
+    let profileReady = profile !== null;
+
     if (profile === null) {
       const metadata = user.user_metadata as { full_name?: string } | null;
       const { error: upsertError } = await supabase.from("profiles").upsert(
@@ -119,6 +122,40 @@ export async function proxy(request: NextRequest) {
           userId: user.id,
           ok: !upsertError,
         });
+      }
+      profileReady = !upsertError;
+    }
+
+    // Si el alta incluyó un código, se canjea apenas existen sesión y
+    // perfil. Ante un fallo transitorio queda en metadata y se reintenta en
+    // la próxima request; después de un resultado definitivo se limpia para
+    // no sumar consultas futuras. El RPC siempre usa auth.uid() como alumno.
+    if (profileReady) {
+      try {
+        const referralResult = await claimReferralFromUserMetadata(
+          supabase,
+          user.user_metadata
+        );
+        if (referralResult) {
+          await supabase.auth.updateUser({
+            data: { coach_referral_code: null },
+          });
+          if (DEV_LOG) {
+            console.log("[FORJA][proxy] vincular entrenador ->", {
+              userId: user.id,
+              result: referralResult,
+            });
+          }
+        }
+      } catch {
+        // No se bloquea la app: el código queda pendiente para reintentarse
+        // en la siguiente request y nunca se crea una relación insegura.
+        if (DEV_LOG) {
+          console.log("[FORJA][proxy] vincular entrenador ->", {
+            userId: user.id,
+            result: "error",
+          });
+        }
       }
     }
 

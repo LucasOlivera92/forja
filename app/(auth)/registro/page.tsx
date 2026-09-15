@@ -6,6 +6,11 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/shared/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import {
+  claimCoachReferralCode,
+  isValidCoachReferralCode,
+  normalizeCoachReferralCode,
+} from "@/lib/cloud/coach-referrals";
 
 /** Traduce los mensajes de error de Supabase Auth más comunes al registrarse. */
 function traducirErrorRegistro(message: string): string {
@@ -27,6 +32,7 @@ export default function RegistroPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirmation, setPendingConfirmation] = useState(false);
@@ -51,11 +57,33 @@ export default function RegistroPage() {
     }
 
     setLoading(true);
+
+    const normalizedReferralCode = normalizeCoachReferralCode(referralCode);
+    if (normalizedReferralCode) {
+      try {
+        const isValid = await isValidCoachReferralCode(supabase, normalizedReferralCode);
+        if (!isValid) {
+          setLoading(false);
+          setError("El código de entrenador no existe o ya no está activo.");
+          return;
+        }
+      } catch {
+        setLoading(false);
+        setError("No pudimos validar el código de entrenador. Probá de nuevo.");
+        return;
+      }
+    }
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: {
+          full_name: fullName,
+          ...(normalizedReferralCode
+            ? { coach_referral_code: normalizedReferralCode }
+            : {}),
+        },
         // Usa el origen actual (localhost en dev, el dominio real en
         // producción) en vez de un dominio fijo, para que el link del
         // email de confirmación funcione en cualquier entorno.
@@ -88,6 +116,21 @@ export default function RegistroPage() {
 
       if (process.env.NODE_ENV !== "production") {
         console.log("[FORJA][registro] crear perfil ->", { ok: !profileError });
+      }
+
+      if (!profileError && normalizedReferralCode) {
+        try {
+          const claimResult = await claimCoachReferralCode(supabase, normalizedReferralCode);
+          if (claimResult === "linked" || claimResult === "already_linked") {
+            await supabase.auth.updateUser({
+              data: { coach_referral_code: null },
+            });
+          }
+        } catch {
+          // La cuenta ya existe y el código permanece en user_metadata.
+          // proxy.ts vuelve a intentar el canje en la próxima request con
+          // sesión, sin duplicar la cuenta ni pedir otra vez la contraseña.
+        }
       }
 
       setLoading(false);
@@ -155,6 +198,17 @@ export default function RegistroPage() {
           disabled={!isSupabaseConfigured || loading}
           autoComplete="new-password"
           required
+        />
+        <input
+          type="text"
+          placeholder="Código de entrenador (opcional)"
+          value={referralCode}
+          onChange={(event) => setReferralCode(event.target.value.toUpperCase())}
+          className="h-[52px] rounded-xl bg-bg-surface border border-border-subtle px-4 text-sm placeholder:text-text-muted uppercase"
+          disabled={!isSupabaseConfigured || loading}
+          autoComplete="off"
+          maxLength={8}
+          inputMode="text"
         />
         <input
           type="password"
