@@ -1571,6 +1571,25 @@ export function clearNutritionProfile(): void {
 }
 
 /**
+ * Sprint 7.1 — mitad "descargar" de la sincronización de Nutrición (la
+ * mitad "subir" ya la cubre `lib/cloud/nutrition-import.ts` en sentido
+ * contrario). Recibe un perfil que YA pasó por la validación del
+ * adaptador cloud (`isNutritionProfilePayload`, en `lib/cloud/nutrition.ts`)
+ * — acá no se vuelve a validar la forma.
+ *
+ * Nunca sobrescribe un perfil local que ya exista (ni siquiera si es
+ * distinto): esa comparación y la decisión de "hay conflicto, no bajar"
+ * son responsabilidad de quien llama, antes de invocar esto. Esta función
+ * solo escribe si local es exactamente `null` — es la mitad mecánica,
+ * sin lógica de comparación.
+ */
+export function adoptNutritionProfileFromCloud(profile: NutritionProfile): NutritionProfile | null {
+  if (getNutritionProfile() !== null) return null;
+  writeJSON(NUTRITION_PROFILE_KEY, profile);
+  return profile;
+}
+
+/**
  * Sprint 5.1 — "Sistema de Comidas Inteligentes". La unidad principal es
  * la Meal Template (una comida armada), no el alimento suelto. Todo acá
  * respeta la Filosofía de FORJA (AGENTS.md): un solo click marca la
@@ -1672,6 +1691,21 @@ export function completeMealTemplate(templateId: string, date?: string): MealCom
   const log = getMealCompletionLog(key);
   writeJSON(NUTRITION_LOG_KEY_PREFIX + key, [...log, entry]);
   return entry;
+}
+
+/**
+ * Sprint 7.1 — mitad "descargar" para un registro diario puntual. Recibe
+ * un array YA validado (`isMealCompletionLogArray`, en
+ * `lib/cloud/nutrition.ts`) para una fecha puntual. Nunca sobrescribe ni
+ * duplica: solo escribe si ese día todavía no aparece entre
+ * `getAllNutritionLogDates()` (es decir, no existe ninguna key local para
+ * esa fecha) — la comparación semántica y la decisión de "hay conflicto,
+ * no bajar" son responsabilidad de quien llama.
+ */
+export function adoptNutritionDailyLogFromCloud(logDate: string, entries: MealCompletionLog[]): MealCompletionLog[] | null {
+  if (getAllNutritionLogDates().includes(logDate)) return null;
+  writeJSON(NUTRITION_LOG_KEY_PREFIX + logDate, entries);
+  return entries;
 }
 
 /** Sprint 5.1 — suma los macros de todas las comidas ya marcadas hoy. Base de "el usuario debe sentir progreso inmediato". */
@@ -2258,6 +2292,29 @@ export function repeatMondayToSaturday(): WeeklyMealPlan {
   }
   writeJSON(WEEKLY_MEAL_PLAN_KEY, updated);
   return updated;
+}
+
+const ALL_MEAL_SLOTS: MealSlot[] = ["desayuno", "almuerzo", "merienda", "cena"];
+
+/** `true` si los 28 casilleros (7 días × 4 tipos, siempre los 4 tipos posibles — no solo los `EXPECTED_MEAL_TYPES` con plantilla activa) están en `null`. */
+function weeklyMealPlanIsEmpty(plan: WeeklyMealPlan): boolean {
+  return WEEKDAYS.every((weekday) => ALL_MEAL_SLOTS.every((mealType) => plan[weekday][mealType] === null));
+}
+
+/**
+ * Sprint 7.1 — mitad "descargar" para la planificación semanal. Recibe una
+ * planificación YA validada (`isWeeklyMealPlanPayload`, en
+ * `lib/cloud/nutrition.ts`). Nunca sobrescribe una planificación local que
+ * ya tenga algo elegido: solo escribe si la local está completamente
+ * vacía (`weeklyMealPlanIsEmpty`, mismo criterio de "sin planificación
+ * local" que usa `lib/cloud/nutrition-import.ts`) — la comparación
+ * semántica y la decisión de "hay conflicto, no bajar" son
+ * responsabilidad de quien llama.
+ */
+export function adoptWeeklyMealPlanFromCloud(plan: WeeklyMealPlan): WeeklyMealPlan | null {
+  if (!weeklyMealPlanIsEmpty(getWeeklyMealPlan())) return null;
+  writeJSON(WEEKLY_MEAL_PLAN_KEY, plan);
+  return plan;
 }
 
 /** Fase 3 del spec: etiqueta lista para mostrar (emoji + texto) por categoría — la UI de la lista de compras no decide texto, solo lo imprime. */
