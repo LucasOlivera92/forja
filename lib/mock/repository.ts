@@ -1805,8 +1805,18 @@ function getKeysWithPrefix(prefix: string): string[] {
   return keys;
 }
 
-/** Todas las fechas (YYYY-MM-DD) que tienen al menos un registro guardado, ordenadas. */
-function getAllNutritionLogDates(): string[] {
+/**
+ * Todas las fechas (YYYY-MM-DD) que tienen al menos un registro guardado,
+ * ordenadas.
+ *
+ * Sprint 7.0 — se agrega `export`: es la única forma de enumerar "qué días
+ * tienen datos locales" sin duplicar el enumerado de keys de localStorage
+ * en `lib/cloud/nutrition-import.ts` (mismo criterio que
+ * `getCustomRoutinesSnapshot`, agregada en Sprint 6.7 para el mismo fin
+ * con rutinas). Sigue siendo una función pura de solo lectura — no cambia
+ * en nada su comportamiento ni su firma.
+ */
+export function getAllNutritionLogDates(): string[] {
   return getKeysWithPrefix(NUTRITION_LOG_KEY_PREFIX)
     .map((key) => key.slice(NUTRITION_LOG_KEY_PREFIX.length))
     .sort();
