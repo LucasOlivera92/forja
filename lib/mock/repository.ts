@@ -2687,10 +2687,16 @@ function localDateKey(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-/** Lunes (fecha local, YYYY-MM-DD) de la semana actual: los tildes de la lista se reinician solos cada semana. */
+/**
+ * Lunes (fecha local, YYYY-MM-DD) del ciclo de compras.
+ * Sábado y domingo ya pertenecen a la semana que empieza el lunes siguiente:
+ * así, lo comprado durante el fin de semana no se destilda al día siguiente.
+ */
 function currentWeekStartKey(): string {
   const now = new Date();
-  now.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const day = now.getDay();
+  now.setDate(now.getDate() - ((day + 6) % 7));
+  if (day === 6 || day === 0) now.setDate(now.getDate() + 7);
   return localDateKey(now);
 }
 
