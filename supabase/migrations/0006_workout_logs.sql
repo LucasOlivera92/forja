@@ -124,11 +124,11 @@ $$;
 create function public.workout_executions_reject_update()
 returns trigger
 language plpgsql
-as $
+as $forja$
 begin
   raise exception 'workout_executions rows are immutable';
 end;
-$;
+$forja$;
 
 create trigger workout_sessions_set_audit_on_insert
   before insert on public.workout_sessions
