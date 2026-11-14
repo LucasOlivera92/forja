@@ -121,23 +121,14 @@ begin
 end;
 $$;
 
-create function public.workout_executions_set_audit_on_update()
+create function public.workout_executions_reject_update()
 returns trigger
 language plpgsql
-as $$
+as $
 begin
-  new.athlete_id := old.athlete_id;
-  new.routine_id := old.routine_id;
-  new.week_id := old.week_id;
-  new.execution_id := old.execution_id;
-  new.created_by := old.created_by;
-  new.created_at := old.created_at;
-  new.updated_by := auth.uid();
-  new.version := old.version + 1;
-  new.updated_at := now();
-  return new;
+  raise exception 'workout_executions rows are immutable';
 end;
-$$;
+$;
 
 create trigger workout_sessions_set_audit_on_insert
   before insert on public.workout_sessions
@@ -151,9 +142,9 @@ create trigger workout_executions_set_audit_on_insert
   before insert on public.workout_executions
   for each row execute function public.workout_set_audit_on_insert();
 
-create trigger workout_executions_set_audit_on_update
+create trigger workout_executions_reject_update
   before update on public.workout_executions
-  for each row execute function public.workout_executions_set_audit_on_update();
+  for each row execute function public.workout_executions_reject_update();
 
 /* ------------------------------------------------------------------ */
 /* RLS                                                                 */
@@ -196,9 +187,6 @@ create policy workout_executions_select_own on public.workout_executions for sel
   using (athlete_id = auth.uid());
 create policy workout_executions_insert_own on public.workout_executions for insert to authenticated
   with check (athlete_id = auth.uid());
-create policy workout_executions_update_own on public.workout_executions for update to authenticated
-  using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
-
 create policy workout_executions_select_coach on public.workout_executions for select to authenticated
   using (
     public.current_user_role() = 'coach'
@@ -214,9 +202,6 @@ create policy workout_executions_select_admin on public.workout_executions for s
   using (public.current_user_role() = 'admin');
 create policy workout_executions_insert_admin on public.workout_executions for insert to authenticated
   with check (public.current_user_role() = 'admin');
-create policy workout_executions_update_admin on public.workout_executions for update to authenticated
-  using (public.current_user_role() = 'admin') with check (public.current_user_role() = 'admin');
-
 /* ------------------------------------------------------------------ */
 /* Grants explícitos — nunca DELETE.                                    */
 /* ------------------------------------------------------------------ */
@@ -227,4 +212,4 @@ grant select, insert, update on public.workout_sessions to authenticated;
 
 revoke all on public.workout_executions from anon;
 revoke all on public.workout_executions from authenticated;
-grant select, insert, update on public.workout_executions to authenticated;
+grant select, insert on public.workout_executions to authenticated;
