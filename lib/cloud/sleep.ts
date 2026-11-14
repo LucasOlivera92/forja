@@ -99,6 +99,8 @@ function parseSleepLogRow(raw: unknown): SleepLogRow {
     typeof log_date === "string" &&
     typeof hoursNumber === "number" &&
     Number.isFinite(hoursNumber) &&
+    hoursNumber > 0 &&
+    hoursNumber <= 24 &&
     isSleepQuality(quality) &&
     Number.isSafeInteger(version) &&
     (version as number) >= 1 &&
@@ -113,8 +115,10 @@ function parseSleepLogRow(raw: unknown): SleepLogRow {
   if (!isSleepLogPayload(payload)) {
     throw new SleepPayloadValidationError(`La fila de sleep_logs ${id} tiene un payload que no respeta la forma de SleepLog.`);
   }
-  if (payload.date !== log_date) {
-    throw new SleepPayloadValidationError(`La fila de sleep_logs ${id} tiene identidad inconsistente entre log_date y payload.`);
+  if (payload.date !== log_date || payload.hours !== hoursNumber || payload.quality !== quality) {
+    throw new SleepPayloadValidationError(
+      `La fila de sleep_logs ${id} tiene datos inconsistentes entre sus columnas y el payload.`
+    );
   }
 
   return {
