@@ -45,6 +45,9 @@ import {
   NutritionWeekdayStat,
   ShoppingList,
   ShoppingListCategoryGroup,
+  SleepInsight,
+  SleepLog,
+  SleepQuality,
   ShoppingListItem,
   TrendDirection,
   Weekday,
@@ -249,6 +252,59 @@ function getCustomRoutines(): Routine[] {
  */
 export function getCustomRoutinesSnapshot(): unknown {
   return readJSON<unknown>(CUSTOM_ROUTINES_KEY, []);
+}
+
+/**
+ * Sprint 7.2 — Fotos de solo lectura de los registros de Entreno locales,
+ * para `lib/cloud/workout-import.ts`. Tipo `unknown` a propósito (igual que
+ * `getCustomRoutinesSnapshot`): el importador valida todo antes de subir.
+ * No escriben ni migran nada; respetan el namespace por usuario de siempre.
+ *
+ * Sesiones en vivo: una por key `forja.session.{routineId}.{weekId}.{dayId}`.
+ * Ejecuciones archivadas: cada key `forja.executions.{routineId}.{weekId}`
+ * guarda un array — se aplanan todas en una sola lista. Un valor que no
+ * sea array se devuelve tal cual para que el importador lo marque inválido.
+ */
+export function getAllDaySessionsSnapshot(): unknown[] {
+  return getKeysWithPrefix(SESSION_KEY_PREFIX)
+    .map((key) => readJSON<unknown>(key, null))
+    .filter((value) => value !== null);
+}
+
+/**
+ * Sprint 7.3 — mitad "descargar" de la sincronización de Entreno. Reciben
+ * datos YA validados por `lib/cloud/workout-logs.ts`. Nunca sobrescriben ni
+ * duplican: la sesión solo se escribe si ese día no tiene key local; la
+ * ejecución solo se agrega si su id no está ya en el array local de esa
+ * rutina/semana. Escriben con `writeJSON` directo (no `writeSession`) a
+ * propósito: lo que viene de la nube no se vuelve a subir. La comparación
+ * de conflictos es responsabilidad de quien llama.
+ */
+export function adoptDaySessionFromCloud(session: DaySession): DaySession | null {
+  const key = sessionKey(session.weekId, session.dayId, session.routineId);
+  if (getKeysWithPrefix(SESSION_KEY_PREFIX).includes(key)) return null;
+  writeJSON(key, session);
+  return session;
+}
+
+export function adoptRoutineExecutionFromCloud(execution: RoutineExecution): RoutineExecution | null {
+  const key = weekExecutionsKey(execution.routineId, execution.weekId);
+  const existing = readJSON<RoutineExecution[]>(key, []);
+  if (existing.some((item) => item.id === execution.id)) return null;
+  const next = [...existing, execution].sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+  writeJSON(key, next);
+  return execution;
+}
+
+export function getAllRoutineExecutionsSnapshot(): unknown[] {
+  const result: unknown[] = [];
+  for (const key of getKeysWithPrefix(EXECUTIONS_KEY_PREFIX)) {
+    const value = readJSON<unknown>(key, null);
+    if (value === null) continue;
+    if (Array.isArray(value)) result.push(...value);
+    else result.push(value);
+  }
+  return result;
 }
 
 /**
@@ -1064,8 +1120,44 @@ export function getDaySession(weekId: string, dayId: string, routineId: string =
   return readJSON(sessionKey(weekId, dayId, routineId), emptySession(weekId, dayId, routineId));
 }
 
+/**
+ * Sprint 7.3 — Aviso de escrituras locales de Entreno, para la subida
+ * automática a la nube (`lib/cloud/workout-autosync.ts`). Este archivo no
+ * sabe nada de Supabase: solo avisa "se guardó esto" a quien se haya
+ * suscripto. El guardado local siempre ocurre ANTES de avisar, y un
+ * listener que falle jamás puede romper ni revertir el guardado local.
+ * Solo se avisa si hay un usuario cacheado (si no, `writeJSON` no escribió nada).
+ */
+type DaySessionWriteListener = (session: DaySession) => void;
+type RoutineExecutionWriteListener = (execution: RoutineExecution) => void;
+
+const daySessionWriteListeners = new Set<DaySessionWriteListener>();
+const routineExecutionWriteListeners = new Set<RoutineExecutionWriteListener>();
+
+export function subscribeToDaySessionWrites(listener: DaySessionWriteListener): () => void {
+  daySessionWriteListeners.add(listener);
+  return () => {
+    daySessionWriteListeners.delete(listener);
+  };
+}
+
+export function subscribeToRoutineExecutionWrites(listener: RoutineExecutionWriteListener): () => void {
+  routineExecutionWriteListeners.add(listener);
+  return () => {
+    routineExecutionWriteListeners.delete(listener);
+  };
+}
+
 function writeSession(session: DaySession): void {
   writeJSON(sessionKey(session.weekId, session.dayId, session.routineId), session);
+  if (!getCachedUserId()) return;
+  for (const listener of daySessionWriteListeners) {
+    try {
+      listener(session);
+    } catch {
+      // El guardado local ya se hizo; un listener roto no puede afectarlo.
+    }
+  }
 }
 
 function touchSessionStart(session: DaySession): DaySession {
@@ -1191,6 +1283,15 @@ export function archiveWeekExecution(weekId: string, routineId: string = ROUTINE
   };
 
   writeJSON(weekExecutionsKey(routineId, weekId), [...existing, execution]);
+  if (getCachedUserId()) {
+    for (const listener of routineExecutionWriteListeners) {
+      try {
+        listener(execution);
+      } catch {
+        // El guardado local ya se hizo; un listener roto no puede afectarlo.
+      }
+    }
+  }
   return execution;
 }
 
@@ -2294,6 +2395,178 @@ export function repeatMondayToSaturday(): WeeklyMealPlan {
   return updated;
 }
 
+/* ------------------------------------------------------------------ */
+/* Descanso (Sprint 8.0)                                               */
+/* ------------------------------------------------------------------ */
+
+const SLEEP_LOG_KEY_PREFIX = "forja.sleep.log.";
+const SLEEP_QUALITY_SCORE: Record<SleepQuality, number> = { mal: 1, regular: 2, bien: 3 };
+const SLEEP_QUALITIES: SleepQuality[] = ["mal", "regular", "bien"];
+
+function isSleepLog(value: unknown): value is SleepLog {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.date === "string" &&
+    typeof v.hours === "number" &&
+    Number.isFinite(v.hours) &&
+    typeof v.quality === "string" &&
+    (SLEEP_QUALITIES as string[]).includes(v.quality) &&
+    typeof v.loggedAt === "string"
+  );
+}
+
+/** Registro de sueño de la noche que terminó en `date` (default: hoy), o `null` si todavía no se cargó. */
+export function getSleepLog(date?: string): SleepLog | null {
+  const value = readJSON<unknown>(SLEEP_LOG_KEY_PREFIX + todayKey(date), null);
+  return isSleepLog(value) ? value : null;
+}
+
+/**
+ * Guarda (o reemplaza) el sueño de la noche que terminó en `date`. Horas
+ * entre 0 (exclusivo) y 24, redondeadas al cuarto de hora. Devuelve `null`
+ * si las horas no son válidas. Un solo registro por día: volver a cargar
+ * corrige, no duplica.
+ */
+export function saveSleepLog(input: { hours: number; quality: SleepQuality }, date?: string): SleepLog | null {
+  if (!Number.isFinite(input.hours) || input.hours <= 0 || input.hours > 24) return null;
+  if (!SLEEP_QUALITIES.includes(input.quality)) return null;
+  const log: SleepLog = {
+    date: todayKey(date),
+    hours: Math.round(input.hours * 4) / 4,
+    quality: input.quality,
+    loggedAt: new Date().toISOString(),
+  };
+  writeJSON(SLEEP_LOG_KEY_PREFIX + log.date, log);
+  return log;
+}
+
+/** Todos los registros de sueño locales válidos, del más reciente al más antiguo. */
+export function getAllSleepLogs(): SleepLog[] {
+  return getKeysWithPrefix(SLEEP_LOG_KEY_PREFIX)
+    .map((key) => readJSON<unknown>(key, null))
+    .filter(isSleepLog)
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
+ * Sprint 8.0 — mitad "descargar" para Descanso. Recibe un registro YA
+ * validado por `lib/cloud/sleep.ts`; nunca sobrescribe: solo escribe si esa
+ * fecha no tiene registro local. La comparación de conflictos es de quien llama.
+ */
+export function adoptSleepLogFromCloud(log: SleepLog): SleepLog | null {
+  if (getKeysWithPrefix(SLEEP_LOG_KEY_PREFIX).includes(SLEEP_LOG_KEY_PREFIX + log.date)) return null;
+  writeJSON(SLEEP_LOG_KEY_PREFIX + log.date, log);
+  return log;
+}
+
+function previousDateKey(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+interface SleepNight {
+  log: SleepLog;
+  score: number;
+  /** Comidas completadas el día ANTERIOR (la noche que terminó en `log.date`). */
+  meals: MealCompletionLog[];
+}
+
+function average(values: number[]): number {
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+/** Mínimo de noches por grupo, y de noches totales, para mostrar una conclusión (evita "patrones" por azar). */
+const MIN_NIGHTS_PER_GROUP = 2;
+const MIN_TOTAL_NIGHTS = 4;
+/** Diferencia mínima de puntaje (escala 1–3) contra el promedio general para considerarla relevante. */
+const MIN_SCORE_DIFFERENCE = 0.5;
+
+function buildGroupInsight(
+  id: string,
+  title: (better: boolean) => string,
+  group: SleepNight[],
+  overallAvg: number
+): SleepInsight | null {
+  if (group.length < MIN_NIGHTS_PER_GROUP) return null;
+  const groupAvg = average(group.map((n) => n.score));
+  const diff = groupAvg - overallAvg;
+  if (Math.abs(diff) < MIN_SCORE_DIFFERENCE) return null;
+  const avgHours = Math.round(average(group.map((n) => n.log.hours)) * 10) / 10;
+  const better = diff > 0;
+  return {
+    id,
+    title: title(better),
+    detail: `Observado en ${group.length} noches: dormiste en promedio ${avgHours} h y la calidad fue ${better ? "mejor" : "peor"} que tu promedio. Con pocos registros puede ser casualidad.`,
+    nights: group.length,
+  };
+}
+
+/**
+ * Cruza cada noche registrada con lo que se marcó comer el día anterior y
+ * devuelve conclusiones simples (solo con evidencia mínima): por cena
+ * elegida, por haber completado o no todas las comidas, y por cena tarde
+ * (22 h o más). Es una ayuda para que la persona se autoconozca — correlación,
+ * no causa — y por eso el texto nunca afirma que algo "causó" el sueño.
+ */
+export function getSleepFoodInsights(): SleepInsight[] {
+  const nights: SleepNight[] = getAllSleepLogs().map((log) => ({
+    log,
+    score: SLEEP_QUALITY_SCORE[log.quality],
+    meals: getMealCompletionLog(previousDateKey(log.date)),
+  }));
+  const withMeals = nights.filter((n) => n.meals.length > 0);
+  if (withMeals.length < MIN_TOTAL_NIGHTS) return [];
+
+  const overallAvg = average(withMeals.map((n) => n.score));
+  const insights: SleepInsight[] = [];
+
+  // 1. Por cena elegida.
+  const byDinner = new Map<string, SleepNight[]>();
+  for (const night of withMeals) {
+    const dinner = night.meals.find((m) => m.mealType === "cena");
+    if (!dinner) continue;
+    byDinner.set(dinner.mealTemplateId, [...(byDinner.get(dinner.mealTemplateId) ?? []), night]);
+  }
+  for (const [templateId, group] of byDinner) {
+    const name = getMealTemplate(templateId)?.name ?? "esa cena";
+    const insight = buildGroupInsight(
+      `dinner-${templateId}`,
+      (better) => `Posible patrón: las noches con ${name} de cena coincidieron con un sueño ${better ? "mejor" : "peor"}`,
+      group,
+      overallAvg
+    );
+    if (insight) insights.push(insight);
+  }
+
+  // 2. Día completo (todos los tipos de comida) vs incompleto.
+  const complete = withMeals.filter((n) => new Set(n.meals.map((m) => m.mealType)).size >= EXPECTED_MEAL_TYPES.length);
+  const incomplete = withMeals.filter((n) => !complete.includes(n));
+  const completeInsight = buildGroupInsight(
+    "all-meals",
+    (better) => `Posible patrón: los días con todas las comidas tildadas coincidieron con un sueño ${better ? "mejor" : "peor"}`,
+    complete,
+    overallAvg
+  );
+  if (completeInsight && incomplete.length >= MIN_NIGHTS_PER_GROUP) insights.push(completeInsight);
+
+  // 3. Cena tarde (22 h o más).
+  const lateDinner = withMeals.filter((n) => {
+    const dinner = n.meals.find((m) => m.mealType === "cena");
+    return dinner !== undefined && new Date(dinner.completedAt).getHours() >= 22;
+  });
+  const lateInsight = buildGroupInsight(
+    "late-dinner",
+    (better) => `Posible patrón: las cenas tarde (22 h o más) coincidieron con un sueño ${better ? "mejor" : "peor"}`,
+    lateDinner,
+    overallAvg
+  );
+  if (lateInsight) insights.push(lateInsight);
+
+  return insights;
+}
+
 const ALL_MEAL_SLOTS: MealSlot[] = ["desayuno", "almuerzo", "merienda", "cena"];
 
 /** `true` si los 28 casilleros (7 días × 4 tipos, siempre los 4 tipos posibles — no solo los `EXPECTED_MEAL_TYPES` con plantilla activa) están en `null`. */
@@ -2400,6 +2673,64 @@ export function getShoppingList(): ShoppingList {
     planned: getWeeklyMealPlanCompletion(),
     groups,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Lista de compras — tildar ítems comprados y aviso semanal (Sprint 8.1) */
+/* ------------------------------------------------------------------ */
+
+const SHOPPING_CHECKED_KEY = "forja.shopping.checked";
+
+function localDateKey(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Lunes (fecha local, YYYY-MM-DD) del ciclo de compras.
+ * Sábado y domingo ya pertenecen a la semana que empieza el lunes siguiente:
+ * así, lo comprado durante el fin de semana no se destilda al día siguiente.
+ */
+function currentWeekStartKey(): string {
+  const now = new Date();
+  const day = now.getDay();
+  now.setDate(now.getDate() - ((day + 6) % 7));
+  if (day === 6 || day === 0) now.setDate(now.getDate() + 7);
+  return localDateKey(now);
+}
+
+interface ShoppingCheckedState {
+  weekStart: string;
+  foodIds: string[];
+}
+
+function readShoppingChecked(): string[] {
+  const value = readJSON<unknown>(SHOPPING_CHECKED_KEY, null);
+  if (typeof value !== "object" || value === null) return [];
+  const state = value as Partial<ShoppingCheckedState>;
+  if (state.weekStart !== currentWeekStartKey() || !Array.isArray(state.foodIds)) return [];
+  return state.foodIds.filter((id): id is string => typeof id === "string");
+}
+
+/** Ids de alimentos ya tildados como comprados esta semana. */
+export function getShoppingCheckedFoodIds(): string[] {
+  return readShoppingChecked();
+}
+
+/** Tilda/destilda un ítem de la lista de compras. Devuelve los ids tildados resultantes. */
+export function toggleShoppingChecked(foodId: string): string[] {
+  const current = readShoppingChecked();
+  const next = current.includes(foodId) ? current.filter((id) => id !== foodId) : [...current, foodId];
+  const state: ShoppingCheckedState = { weekStart: currentWeekStartKey(), foodIds: next };
+  writeJSON(SHOPPING_CHECKED_KEY, state);
+  return next;
+}
+
+/** `true` si hoy es sábado o domingo (hora local) y hay al menos una comida planificada — momento de armar la lista de compras. */
+export function shouldShowShoppingReminder(): boolean {
+  const day = new Date().getDay();
+  return (day === 6 || day === 0) && getWeeklyMealPlanCompletion().planned > 0;
 }
 
 /* ------------------------------------------------------------------ */

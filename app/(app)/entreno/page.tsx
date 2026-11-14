@@ -13,6 +13,7 @@ import {
 } from "@/lib/mock/repository";
 import { Routine } from "@/lib/mock/types";
 import { RoutineCloudBackup } from "./_components/RoutineCloudBackup";
+import { WorkoutCloudSync } from "./_components/WorkoutCloudSync";
 
 /**
  * Sprint 3.5 — Entreno unificado: la raíz de /entreno ahora es el catálogo
@@ -124,6 +125,8 @@ export default function EntrenoPage() {
       </Link>
 
       <RoutineCloudBackup onRoutinesDownloaded={refresh} />
+
+      <WorkoutCloudSync onWorkoutDownloaded={refresh} />
 
       <div className="flex flex-col gap-3">
         {(routines ?? []).map((routine) => {

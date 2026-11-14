@@ -13,6 +13,7 @@ import {
 } from "@/lib/mock/repository";
 import { ActivityLevel, FavoriteFoodCategory, NutritionGoal, NutritionProfile } from "@/lib/mock/types";
 import { NutritionCloudSync } from "./_components/NutritionCloudSync";
+import { ShoppingReminderCard } from "./_components/ShoppingReminderCard";
 
 /**
  * Sprint 5.0 — "Motor del plan nutricional". Reemplaza el contenido de
@@ -152,6 +153,8 @@ export default function NutricionPage() {
         <h1 className="text-2xl font-display font-semibold">Nutrición</h1>
         <p className="text-text-secondary text-sm mt-1">Tu plan nutricional</p>
       </div>
+
+      <ShoppingReminderCard />
 
       <NutritionCloudSync onProfileDownloaded={setProfile} />
 
