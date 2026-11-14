@@ -95,3 +95,28 @@ h1, h2, h3, .font-display {
 .animate-acero-sparkle {
   animation: acero-sparkle 1.8s ease-in-out infinite;
 }
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .report-print,
+  .report-print * {
+    visibility: visible;
+  }
+  .report-print {
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+  }
+  .report-print .no-print {
+    display: none;
+  }
+  .report-print > div {
+    break-inside: avoid;
+  }
+}

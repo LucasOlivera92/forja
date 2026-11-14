@@ -11,7 +11,10 @@ import {
   isNutritionProfilePayload,
   isWeeklyMealPlanPayload,
   NutritionAdapterError,
+  NutritionConflictError,
+  updateNutritionDailyLogPayload,
 } from "@/lib/cloud/nutrition";
+import { createClient } from "@/lib/supabase/client";
 import { getAllNutritionLogDates, getMealCompletionLog, getNutritionProfile, getWeeklyMealPlan } from "@/lib/mock/repository";
 import type { MealSlot, Weekday } from "@/lib/mock/types";
 
@@ -324,4 +327,54 @@ export async function importLocalNutritionData(supabase: SupabaseClient): Promis
   const dailyLogs = await importAllNutritionDailyLogs(supabase, userId);
 
   return { userId, profile, weeklyPlan, dailyLogs };
+}
+
+function cloudLogIsSafePrefix(
+  cloudLog: ReturnType<typeof getMealCompletionLog>,
+  localLog: ReturnType<typeof getMealCompletionLog>
+): boolean {
+  return cloudLog.every((cloudEntry) => {
+    const localEntry = localLog.find((entry) => entry.id === cloudEntry.id);
+    return localEntry !== undefined && jsonValuesEqual(localEntry, cloudEntry);
+  });
+}
+
+/**
+ * Sube el registro nutricional de un día después de una escritura local.
+ * Solo actualiza si la versión remota es un prefijo intacto de la local;
+ * una divergencia entre dispositivos nunca se pisa automáticamente.
+ * Es best-effort: la comida ya quedó guardada localmente y esta función
+ * nunca propaga errores a la interacción principal.
+ */
+export async function uploadNutritionDailyLogBestEffort(logDate: string): Promise<boolean> {
+  try {
+    const supabase = createClient();
+    if (!supabase) return false;
+
+    const userId = await requireVerifiedCurrentUserId(supabase);
+    const localLog = getMealCompletionLog(logDate);
+    if (!isMealCompletionLogArray(localLog)) return false;
+
+    let remote = await getNutritionDailyLogRow(supabase, userId, logDate);
+    if (!remote) {
+      await createNutritionDailyLogRow(supabase, userId, logDate, localLog);
+      return true;
+    }
+
+    if (jsonValuesEqual(remote.payload, localLog)) return true;
+    if (!cloudLogIsSafePrefix(remote.payload, localLog)) return false;
+
+    try {
+      await updateNutritionDailyLogPayload(supabase, remote.id, remote.version, localLog);
+      return true;
+    } catch (error) {
+      if (!(error instanceof NutritionConflictError)) return false;
+      remote = await getNutritionDailyLogRow(supabase, userId, logDate);
+      if (!remote || !cloudLogIsSafePrefix(remote.payload, localLog)) return false;
+      await updateNutritionDailyLogPayload(supabase, remote.id, remote.version, localLog);
+      return true;
+    }
+  } catch {
+    return false;
+  }
 }
