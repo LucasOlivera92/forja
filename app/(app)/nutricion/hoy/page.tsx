@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Card } from "@/shared/ui/Card";
 import { Button } from "@/shared/ui/Button";
 import { clsx } from "@/shared/utils/clsx";
@@ -15,6 +15,7 @@ import {
   getNutritionProfile,
 } from "@/lib/mock/repository";
 import { MealCompletionLog, MealSlot, MealTemplate, NutritionDailyProgress } from "@/lib/mock/types";
+import { uploadNutritionDailyLogBestEffort } from "@/lib/cloud/nutrition-import";
 
 /**
  * Sprint 5.1 — "Sistema de Comidas Inteligentes". Pantalla nueva,
@@ -44,6 +45,7 @@ const MEAL_TYPE_INFO: Record<MealSlot, { label: string; emoji: string }> = {
 };
 
 const foodById = new Map(getFoodCatalog().map((food) => [food.id, food]));
+const emptySubscribe = () => () => undefined;
 
 function formatItem(foodId: string, quantity: number): string {
   const food = foodById.get(foodId);
@@ -52,19 +54,15 @@ function formatItem(foodId: string, quantity: number): string {
 }
 
 export default function ComidasDeHoyPage() {
-  const [log, setLog] = useState<MealCompletionLog[] | undefined>(undefined);
-  const [progress, setProgress] = useState<NutritionDailyProgress | undefined>(undefined);
-  const [hasProfile, setHasProfile] = useState<boolean>(false);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const [, setRevision] = useState(0);
+  const log: MealCompletionLog[] | undefined = mounted ? getMealCompletionLog() : undefined;
+  const progress: NutritionDailyProgress | undefined = mounted ? getNutritionDailyProgress() : undefined;
+  const hasProfile = mounted && getNutritionProfile() !== null;
 
   function refresh() {
-    setLog(getMealCompletionLog());
-    setProgress(getNutritionDailyProgress());
-    setHasProfile(getNutritionProfile() !== null);
+    setRevision((value) => value + 1);
   }
-
-  useEffect(() => {
-    refresh();
-  }, []);
 
   if (log === undefined || !progress) {
     return (
@@ -78,8 +76,9 @@ export default function ComidasDeHoyPage() {
   }
 
   function handleComplete(templateId: string) {
-    completeMealTemplate(templateId);
+    const completed = completeMealTemplate(templateId);
     refresh();
+    if (completed) void uploadNutritionDailyLogBestEffort(completed.date);
   }
 
   return (
