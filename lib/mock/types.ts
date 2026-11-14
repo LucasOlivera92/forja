@@ -534,6 +534,34 @@ export interface WeeklyMealPlanCompletion {
   total: number;
 }
 
+/* ------------------------------------------------------------------ */
+/* Descanso (Sprint 8.0)                                               */
+/* ------------------------------------------------------------------ */
+
+/** Calidad percibida del sueño: 3 niveles, a propósito (registrar más rápido que recordar). */
+export type SleepQuality = "mal" | "regular" | "bien";
+
+/**
+ * Registro de UNA noche. `date` (YYYY-MM-DD) es el día en que la persona
+ * se despertó (la mañana que lo carga) — la cena "de esa noche" es la del
+ * día anterior (`date - 1`).
+ */
+export interface SleepLog {
+  date: string;
+  hours: number;
+  quality: SleepQuality;
+  loggedAt: string;
+}
+
+/** Una conclusión derivada del cruce sueño × comida; solo se muestra con evidencia mínima. */
+export interface SleepInsight {
+  id: string;
+  title: string;
+  detail: string;
+  /** Cantidad de noches que respaldan esta conclusión. */
+  nights: number;
+}
+
 
 /**
  * Sprint 5.3 — "Shopping Engine": un ingrediente ya sumado a lo largo de

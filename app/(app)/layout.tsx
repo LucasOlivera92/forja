@@ -3,6 +3,7 @@ import { BottomNav } from "@/shared/ui/BottomNav";
 import { LogoutButton } from "@/lib/auth/components/LogoutButton";
 import { UserSessionGate } from "@/lib/auth/components/UserSessionGate";
 import { getCurrentProfile, isCoach } from "@/lib/auth";
+import { WorkoutAutoSync } from "@/lib/cloud/components/WorkoutAutoSync";
 
 /**
  * Layout de las 5 pantallas principales (Paso 8).
@@ -49,6 +50,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <UserSessionGate>{children}</UserSessionGate>
       </main>
       <BottomNav />
+      {/* Sprint 7.3 — subida automática de registros de Entreno (no renderiza nada). */}
+      <WorkoutAutoSync />
     </div>
   );
 }
