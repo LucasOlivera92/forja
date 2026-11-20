@@ -11,6 +11,7 @@ import {
 } from "@/lib/mock/repository";
 import { isDaySessionPayload, isRoutineExecutionPayload } from "@/lib/cloud/workout-logs";
 import type { DaySession, NutritionAnalyticsReport, NutritionStatsPeriod, SleepLog } from "@/lib/mock/types";
+import { ProgressGoalsAndPhotos } from "./_components/ProgressGoalsAndPhotos";
 
 type ReportPeriod = NutritionStatsPeriod;
 
@@ -201,6 +202,16 @@ export default function ProgressPage() {
         <Button type="button" variant={period === "mes" ? "primary" : "secondary"} onClick={() => setPeriod("mes")}>
           Mes
         </Button>
+      </div>
+
+      <div className="no-print contents">
+        <ProgressGoalsAndPhotos
+          period={period}
+          daysElapsed={report.nutrition.daysElapsed}
+          workoutSessions={report.workout.sessions}
+          nutritionAdherence={report.nutrition.adherencePercent}
+          averageSleepHours={report.sleep.averageHours}
+        />
       </div>
 
       <SummaryCard title="🏋️ Entrenamiento" items={[
