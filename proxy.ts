@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from "@/lib/supabase/env";
 import { claimReferralFromUserMetadata } from "@/lib/cloud/coach-referrals";
+import { claimCoachInviteFromMetadata } from "@/lib/cloud/coach-invites";
 
 const DEV_LOG = process.env.NODE_ENV !== "production";
 
@@ -18,6 +19,7 @@ const DEV_LOG = process.env.NODE_ENV !== "production";
 const PUBLIC_AUTH_ROUTES = [
   "/login",
   "/registro",
+  "/registro-coach",
   "/recuperar-password",
   "/nueva-password",
   "/auth/callback",
@@ -25,7 +27,7 @@ const PUBLIC_AUTH_ROUTES = [
 ];
 
 /** Rutas de "entrada" de las que un usuario YA logueado no tiene sentido que vuelva a pasar. */
-const ENTRY_ROUTES = ["/login", "/registro"];
+const ENTRY_ROUTES = ["/login", "/registro", "/registro-coach"];
 
 /**
  * Middleware de sesión (Paso 8, extendido en Sprint 6.0).
@@ -131,6 +133,19 @@ export async function proxy(request: NextRequest) {
     // la próxima request; después de un resultado definitivo se limpia para
     // no sumar consultas futuras. El RPC siempre usa auth.uid() como alumno.
     if (profileReady) {
+      try {
+        const coachInviteResult = await claimCoachInviteFromMetadata(
+          supabase,
+          user.user_metadata
+        );
+        if (coachInviteResult) {
+          await supabase.auth.updateUser({ data: { coach_invite_code: null } });
+        }
+      } catch {
+        // La invitación queda en metadata y se vuelve a intentar en la
+        // siguiente request autenticada.
+      }
+
       try {
         const referralResult = await claimReferralFromUserMetadata(
           supabase,
