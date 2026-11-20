@@ -4,6 +4,8 @@ import { LogoutButton } from "@/lib/auth/components/LogoutButton";
 import { UserSessionGate } from "@/lib/auth/components/UserSessionGate";
 import { getCurrentProfile, isCoach } from "@/lib/auth";
 import { WorkoutAutoSync } from "@/lib/cloud/components/WorkoutAutoSync";
+import { createClient } from "@/lib/supabase/server";
+import { isCurrentForjaAdmin } from "@/lib/cloud/coach-invites";
 
 /**
  * Layout de las 5 pantallas principales (Paso 8).
@@ -35,10 +37,17 @@ import { WorkoutAutoSync } from "@/lib/cloud/components/WorkoutAutoSync";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const profile = await getCurrentProfile();
   const showAlumnosLink = isCoach(profile);
+  const supabase = await createClient();
+  const showCoachesLink = supabase ? await isCurrentForjaAdmin(supabase) : false;
 
   return (
     <div className="min-h-screen pb-20">
       <div className="max-w-md mx-auto px-5 pt-4 flex items-center justify-end gap-4">
+        {showCoachesLink && (
+          <Link href="/coaches" className="text-text-secondary text-xs uppercase tracking-wide font-display">
+            Coaches
+          </Link>
+        )}
         {showAlumnosLink && (
           <Link href="/alumnos" className="text-text-secondary text-xs uppercase tracking-wide font-display">
             Mis alumnos
